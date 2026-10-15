@@ -1,0 +1,12 @@
+apiVersion: orun.io/v1
+kind: TaskContract
+spec:
+  goal: The KV namespace per environment is provisioned by Terraform through Orun and publishes the wiring document the app renders from
+  affects:
+    - infra/terraform/cloudflare-kv
+    - apps/web/component.yaml
+    - apps/web/wiring.fixture.json
+  doneWhen:
+    - terraform validate passes on infra/terraform/cloudflare-kv
+    - the wiring keys match the template's tokens
+  gates: []

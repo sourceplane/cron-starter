@@ -1,0 +1,15 @@
+apiVersion: orun.io/v1
+kind: TaskContract
+spec:
+  goal: The upstream cron example runs on Cloudflare Workers with its seven schedules as Cron Triggers driving the same API routes, the records in Workers KV, a per-environment rendered wrangler config and green checks
+  affects:
+    - apps/web
+    - tests/web
+    - pnpm-lock.yaml
+    - package.json
+    - turbo.json
+  doneWhen:
+    - pnpm wire:fixture, typecheck, lint, test and build are green in Checks
+    - wrangler dev --test-scheduled serves the page, a fired trigger runs /api/cron/<interval>, and /api/data/<interval> answers the record
+  gates:
+    - checks

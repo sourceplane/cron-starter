@@ -1,0 +1,34 @@
+# The epic's declaration. metadata.name equals the directory name; metadata.key
+# is the task-key prefix this epic reserves (CR → CR-1, CR-2, …). Owner, target
+# date and health are the platform's — never written here.
+apiVersion: orun.io/v1
+kind: Epic
+metadata:
+  name: cron-starter
+  key: CR
+spec:
+  title: "Vercel's Cron Jobs example on Cloudflare Workers with Cron Triggers and Workers KV"
+  summary: "Vercel's Cron Jobs example — seven cron schedules, each requesting /api/cron/<interval> to record the newest Hacker News story and the run time in Vercel KV, and a page that polls /api/data/<interval> for them — runs on Cloudflare Workers + Static Assets through @opennextjs/cloudflare. The seven schedules are Cron Triggers on the same Worker: a custom worker entry re-exports the generated fetch handler and adds a scheduled handler that turns the expression that fired back into the request Vercel used to make, so the template's own route runs on schedule. The timestamps live in a Workers KV namespace provisioned by Terraform through Orun and bound through the Cirrus baseline's wiring documents."
+  state: backlog
+  milestones:
+    - name: "CR0 — the spec"
+      exitCriteria:
+        - "the doc set and the task contracts are on main"
+      tasks: [CR-1]
+    - name: "CR1 — the crons on Workers"
+      exitCriteria:
+        - "apps/web is the upstream template with the two API routes reading and writing the KV binding through lib/kv.ts"
+        - "the seven vercel.json schedules are triggers.crons on the Worker and the scheduled handler runs /api/cron/<interval> through the OpenNext fetch handler"
+        - "the wrangler config renders per environment from the cloudflare-kv root's wiring document (fixture in verify, live in deploy)"
+        - "`pnpm typecheck`, `pnpm lint`, `pnpm test` and `pnpm build` are green on main (Checks)"
+        - "`wrangler dev --test-scheduled` serves the page, a fired trigger writes the interval's record, and /api/data/<interval> answers it"
+      tasks: [CR-2]
+    - name: "CR2 — the KV namespace from Terraform"
+      exitCriteria:
+        - "infra/terraform/cloudflare-kv provisions the stage and prod namespaces and publishes the wiring document the app renders from"
+      tasks: [CR-3]
+    - name: "CR3 — ready to instantiate"
+      exitCriteria:
+        - "the README says how to run, test, preview and deploy it, lists the schedules, and says how to watch a trigger fire"
+        - "the as-built status records every departure from the upstream template"
+      tasks: [CR-4]
