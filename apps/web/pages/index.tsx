@@ -1,6 +1,8 @@
+import type { GetServerSideProps } from 'next'
 import { Layout, Text, Code, Page, Link } from '@vercel/examples-ui'
 import Post from '@/components/post'
 import Head from 'next/head'
+import { SITE_NAME, requestOrigin } from '@/lib/site'
 
 const intervals = [
   {
@@ -42,15 +44,29 @@ const intervals = [
 
 const image = '/thumbnail.png'
 
-export default function Home({ data }: { data: any }) {
+type Props = { origin: string | null }
+
+// An Open Graph image must be an absolute URL, so the page is rendered per
+// request and builds it on the origin it was asked on (lib/site.ts) — right on
+// workers.dev, on a custom domain and under `wrangler dev`, with no configured
+// site URL. The cron data itself still loads in the browser, as upstream.
+export const getServerSideProps: GetServerSideProps<Props> = async ({ req }) => {
+  const origin = requestOrigin({
+    get: (name) => [req.headers[name]].flat()[0] ?? null,
+  })
+  return { props: { origin: origin?.origin ?? null } }
+}
+
+export default function Home({ origin }: Props) {
+  const imageUrl = origin ? `${origin}${image}` : image
   return (
     <Page>
       <Head>
-        <meta property="og:image" content={image} />
-        <meta name="twitter:image" content={image} />
+        <meta property="og:image" content={imageUrl} />
+        <meta name="twitter:image" content={imageUrl} />
       </Head>
       <section className="flex flex-col gap-6">
-        <Text variant="h1">Cron Triggers on Cloudflare</Text>
+        <Text variant="h1">{SITE_NAME}</Text>
         <Text>
           This example shows you how you can use{' '}
           <Link

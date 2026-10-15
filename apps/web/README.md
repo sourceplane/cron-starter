@@ -1,52 +1,39 @@
----
-name: Vercel Cron Job Example
-slug: vercel-cron
-description: A Next.js app that uses Vercel Cron Jobs to update data at different intervals.
-framework: Next.js
-useCase:
-  - Cron
-  - Functions
-css: Tailwind
-database: Vercel KV
-deployUrl: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fexamples%2Ftree%2Fmain%2Fsolutions%2Fcron&project-name=cron&repository-name=cron&demo-title=Vercel%20Cron%20Job%20Example&demo-description=A%20Next.js%20app%20that%20uses%20Vercel%20Cron%20Jobs%20to%20update%20data%20at%20different%20intervals.&demo-url=https%3A%2F%2Fcron-template.vercel.app%2F&demo-image=https%3A%2F%2Fcron-template.vercel.app%2Fthumbnail.png&stores=%5B%7B"type"%3A"kv"%7D%5D
-demoUrl: https://cron-template.vercel.app/
-relatedTemplates:
-  - hacker-news-slack-bot
-  - cron-og
----
+# apps/web — the page, its API routes and its Cron Triggers
 
-# Vercel Cron Job Example
+Seven schedules record the newest Hacker News story and the time they ran,
+and a page shows each one's last run — Vercel's Cron Jobs example
+([vercel/examples `solutions/cron`](https://github.com/vercel/examples/tree/main/solutions/cron),
+MIT), running on Cloudflare Workers + Static Assets with the schedules as
+**Cron Triggers** on the same Worker and the records in a **Workers KV**
+namespace instead of Vercel KV:
 
-A Next.js app that uses [Vercel Cron Jobs](https://vercel.com/docs/cron-jobs) to update data at different intervals.
-
-## Demo
-
-https://cron-template.vercel.app/
-
-## How to Use
-
-You can choose from one of the following two methods to use this repository:
-
-### One-Click Deploy
-
-Deploy the example using [Vercel](https://vercel.com?utm_source=github&utm_medium=readme&utm_campaign=examples-repo):
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fexamples%2Ftree%2Fmain%2Fsolutions%2Fcron&project-name=cron&repository-name=cron&demo-title=Vercel%20Cron%20Job%20Example&demo-description=A%20Next.js%20app%20that%20uses%20Vercel%20Cron%20Jobs%20to%20update%20data%20at%20different%20intervals.&demo-url=https%3A%2F%2Fcron-template.vercel.app%2F&demo-image=https%3A%2F%2Fcron-template.vercel.app%2Fthumbnail.png&stores=%5B%7B"type"%3A"kv"%7D%5D)
-
-Don't forget to set the required environment variables that you got from the previous step.
-
-### Clone and Deploy
-
-Execute [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app) with [pnpm](https://pnpm.io/installation) to bootstrap the example:
+- `pages/index.tsx` — the page: the seven intervals, each polling its record
+- `pages/api/cron/[cron].ts` — what a schedule runs: fetches the newest story
+  id and writes `{ fetchedAt, id }` under the interval's key
+- `pages/api/data/[interval].ts` — reads the record back with its story
+- `worker.ts` — the Worker's entry: OpenNext's `fetch`, plus the `scheduled`
+  handler Cron Triggers call (`lib/scheduled.ts`), which turns the expression
+  that fired into `GET /api/cron/<interval>` through that same `fetch`
+- `lib/crons.ts` — the seven expressions and their intervals, equal to
+  `triggers.crons` in `wrangler.template.jsonc`
+- `lib/kv.ts` — `kv.set` / `kv.get` over the `KV` binding
+- `lib/site.ts` — the site's name and the repository its links point at
 
 ```bash
-pnpm create next-app --example https://github.com/vercel/examples/tree/main/solutions/cron cron
+pnpm dev        # next dev on http://localhost:3000, a local KV through wrangler's platform proxy (no scheduler)
+pnpm build      # next build + opennextjs-cloudflare build → .open-next/
+pnpm exec wrangler dev --test-scheduled   # the built Worker, same local KV, triggers fired by hand:
+curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"   # runs /api/cron/1m
+curl http://localhost:8787/api/data/1m                     # its record
 ```
 
-Next, run Next.js in development mode:
+The binding's namespace id is not hand-written. `wrangler.template.jsonc`
+names it as a wiring token; `wrangler.jsonc` is that template rendered from
+`wiring.fixture.json` (placeholder ids, for local work and verification), and
+every deploy renders it again from the id the `cloudflare-kv` Terraform root
+published for the environment (`component.yaml`'s `buildCommand`).
 
-```bash
-pnpm dev
-```
-
-Deploy it to the cloud with [Vercel](https://vercel.com/new?utm_source=github&utm_medium=readme&utm_campaign=examples-repo) ([Documentation](https://nextjs.org/docs/deployment)).
+Fourteen Cron Triggers (seven per deployed environment) exceed the Workers
+Free plan's five per account: the account needs Workers Paid. KV is
+eventually consistent, so a record written in one location can read as the
+previous run elsewhere for up to a minute — invisible for "fetched N ago".

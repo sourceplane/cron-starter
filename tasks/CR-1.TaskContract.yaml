@@ -1,5 +1,8 @@
 apiVersion: orun.io/v1
 kind: TaskContract
+metadata:
+  name: CR-1
+  title: "The spec"
 spec:
   goal: The cron-starter epic — declaration, doc set and task contracts — is on main
   affects:

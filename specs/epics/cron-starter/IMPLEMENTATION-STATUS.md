@@ -9,6 +9,7 @@ the code departed from `design.md` or from the upstream template.
 | CR1 — the crons on Workers | ✅ Shipped | [#2](https://github.com/sourceplane/cron-starter/pull/2) |
 | CR2 — the KV namespace from Terraform | ✅ Shipped (validated; apply gated on a linked workspace) | [#3](https://github.com/sourceplane/cron-starter/pull/3) |
 | CR3 — ready to instantiate | ✅ Shipped | [#4](https://github.com/sourceplane/cron-starter/pull/4) |
+| CR4 — a baseline, in one landing | ✅ Shipped (offline-proven; no live bootstrap yet, risk CR-K) | this PR (CR-5), to be tagged `baseline-v1` |
 
 ## Departures from the upstream template
 
@@ -96,7 +97,108 @@ and fixture. Upstream's `turbo.json`, `pnpm-lock.yaml`, `vercel.json`,
 `.gitignore` and `.env.example` are not carried; `apps/web/README.md` is
 upstream's, verbatim.
 
-## Verified
+### The page's name and source link come from `lib/site.ts` (CR4)
+
+`SITE_NAME` is the heading ("Cron Triggers on Cloudflare") and now the
+`<title>` too; `SOURCE_URL` is the layout's repository link and its "Clone &
+Deploy" button. It lives in `lib/`, not beside the pages: anything under
+`pages/` is a route. `pages/_app.tsx` renders the `<title>` and the
+description meta itself and no longer passes the layout its `title` and
+`description` props: the e2e tier found that `@vercel/examples-ui`'s own
+`<Head>` (it imports `next/head.js`) does not reach the server-rendered page
+— with the props passed, the served HTML carried no description meta, and
+CR3's title went through that same `<Head>` — and the layout would have
+suffixed the name with " - Vercel Examples".
+
+### `.wrangler/` is not linted (CR4)
+
+`wrangler dev` (which the README tells a reader to run in `apps/web`) writes
+its bundles to `apps/web/.wrangler/tmp`, and `pnpm lint` then failed on
+them; `eslint.config.mjs` ignores the directory with `.next` and `.open-next`.
+
+### The page renders per request, for an absolute Open Graph image (CR4)
+
+`og:image` / `twitter:image` were the relative `/thumbnail.png`, which Open
+Graph does not accept. `pages/index.tsx` has a `getServerSideProps` that
+reads the request's origin (`requestOrigin` in `lib/site.ts`) and nothing
+else; the image is `<origin>/thumbnail.png` on workers.dev, a custom domain
+or `wrangler dev`, with no configured site URL. `/` is therefore dynamic
+(it was static); the cron data still loads in the browser through SWR, as
+upstream. The unused `data: any` prop went with it, and so did its
+`no-explicit-any` lint override and the one upstream lint warning.
+
+### `apps/web/README.md` is the app's, not the template's (CR4)
+
+Upstream's advertised "Deploy with Vercel" and Vercel KV, and it ships into
+every product.
+
+## Departures from the port (CR4)
+
+| What | Before | After | Why |
+|---|---|---|---|
+| `apps/web/wrangler.jsonc` | git-ignored, rendered by the build | committed as the fixture render, GENERATED banner; Checks diffs it | the deploy lane checks it exists before the build (risk CR-H) |
+| dev's render | `live.mjs --env dev` → no document → red | `--fixture wiring.fixture.json --fixture-envs dev`; the fixture has a `dev` entry | dev is verify-only; no root applies there (CR-I) |
+| `apps/web` → `cloudflare-kv` | `dependsOn` in the default mode (a PR's web lane waited on the KV plan) | `mode: enforced`, `modeRules` advisory on `github-pull-request` | the one landing's order on main; a PR deploys nothing (cirrus-baseline v22's shape) |
+| `apps/web` smoke | `grep 'Cron Triggers on Cloudflare'` on `/` | `/api/data/1m` carries a `fetchedAt` from the last ten minutes | the cron's effect, read back: the every-minute trigger ran the route through the scheduled handler and the Worker reads its namespace. The name is the owner's (risk CR-J) |
+| `ci.yml` gate | `vars.ORUN_CI == 'true'` | skip only while `intent.yaml` names `ws_CHANGE_ME` | a bootstrap cannot set a repository variable |
+| `checks.yml` | push to main + PRs | PRs + `workflow_dispatch` | `orun.run/watch@v1` takes the newest run on the merge sha from ANY workflow |
+| stack-tectonic | 0.18.2 | 0.19.0 | first-deploy retry and smoke backoff; not 0.20.0, whose lane-scoped install Next 16's Turbopack refuses |
+| orun lane pin | v2.78.0 | v2.78.4 | cirrus-baseline's and portfolio's pin |
+| `packages/` | absent — `orun plan` failed: `failed to access discovery root packages` | `packages/.gitkeep` | the discovery roots are required |
+| `intent.yaml` docs pages | `specs/epics/…` | `ai/context/*` | the pages must exist in a product |
+| the KV root's prose and names | Cirrus's "api-edge idempotency replay store", "this fork"; `idempotency_namespace_title`, `adopt_idempotency_namespace` | the cron runs' namespace; `app_kv_title`, `adopt_app_kv` | it ships into every product; no resource address changed |
+| `tooling/wire/render.mjs` | copied the template's header comment | writes a GENERATED banner | the committed render must say it is one |
+| `tasks/CR-1..4` | no `metadata` | `metadata.name` and `title` | `orun work check` (≥ v2.79) refused them |
+
+## Verified (CR4)
+
+- `orun new --status` reads the blueprint at v2.58.11 (the bootstrap floor),
+  v2.78.4 (the lane pin) and v2.79.0: `01-product` 72 files, `02-docs`
+  hook-only. `orun validate` and `orun work check` (1 epic, 5 contracts,
+  prefix CR) clean.
+- `testing/{manifest,phases,coverage,rebrand,retouch,bootstrap-defer,wire}.test.sh`
+  green.
+- `testing/leak.test.sh` (v2.58.11 and v2.79.0): 72 files derived; nothing
+  of the factory, nothing local or built, no provenance prose; 65 shipped
+  sources name no factory path; `worker.ts`, `lib/scheduled.ts` and
+  `lib/crons.ts` ship.
+- `testing/placement.test.sh` (fixture "Sam's Crons & Schedules" /
+  `acme-inc/acme-cron-jobs`; v2.78.4 and v2.79.0): two landings; rebrand
+  `--verify` clean; the page, the Worker, the KV titles and every secret ref
+  the product's; `main: worker.ts` and the seven `triggers.crons` kept in the
+  template and the committed render; no file names a factory path;
+  workspace re-tenanted, `work:` stripped, promotion and dev lanes restored;
+  record rendered. The product's own `orun plan --trigger github-push-main`
+  for the 01-product merge: `cloudflare-kv` apply on stage and prod at lane
+  level 0, `web` deploy at level 1, each waiting on its own environment's
+  apply alone, its smoke reading `/api/data/1m`; on a pull request `web`
+  waits on nothing; the 02-docs merge plans 0 jobs; `--resume` changes
+  nothing. Refused under v2.58.11 by design (risk CR-L).
+- `testing/e2e.test.sh` (v2.79.0 and v2.78.4): the 01-product landing passes
+  the Checks sequence (the committed config is the fixture render); in the
+  job tree staged as orun stages it, the stage lane's `verify-app-structure`,
+  `build-app` (the live render, from a stage document in the job's
+  environment), `verify-build-output` and `deploy-dry-run` pass, binding `KV`
+  to the document's id; the built config keeps `main: worker.ts` and the
+  seven triggers and `.open-next/worker.js` exists for it. `wrangler dev
+  --test-scheduled` serves the built Worker: the component's own smoke
+  REFUSES it before any trigger fired; each of the seven expressions fired
+  through `/__scheduled` logs `/api/cron/<interval> 200 "OK"` from the
+  scheduled handler and its record reads back through `/api/data/<interval>`
+  (an undeclared expression runs nothing); the smoke then PASSES. `/`
+  carries the product's name (heading and `<title>`), its repository links,
+  a description, the seven schedules and an Open Graph image absolute on
+  the origin asked; `GET /api/cron/1h` runs that schedule on request; the
+  thumbnail, the favicon and a 404 are served.
+- Repository checks: `pnpm install --frozen-lockfile`, `wire:fixture` (no
+  diff), typecheck, lint (no warnings), test (22), build (`/` and both API
+  routes dynamic; Worker + assets) green.
+- `terraform validate` green on `infra/terraform/cloudflare-kv` (1.15.3).
+- Not verified: a live bootstrap against a workspace — the KV apply, a real
+  deploy registering fourteen triggers on a Workers Paid account, a trigger
+  firing on Cloudflare's clock, the probes (risk CR-K).
+
+## Verified (CR0–CR3)
 
 - Local: `pnpm run wire:fixture`, `pnpm typecheck`, `pnpm lint` (0 errors,
   1 upstream warning), `pnpm test` (16 tests: the cron table equals the

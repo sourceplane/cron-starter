@@ -1,5 +1,8 @@
 apiVersion: orun.io/v1
 kind: TaskContract
+metadata:
+  name: CR-2
+  title: "The crons on Workers"
 spec:
   goal: The upstream cron example runs on Cloudflare Workers with its seven schedules as Cron Triggers driving the same API routes, the records in Workers KV, a per-environment rendered wrangler config and green checks
   affects:

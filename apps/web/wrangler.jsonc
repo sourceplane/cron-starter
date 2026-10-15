@@ -1,0 +1,38 @@
+// GENERATED from wrangler.template.jsonc by tooling/wire — edit the
+// template, not this file. The committed copy is the fixture render
+// (`pnpm run wire:fixture`); every Orun lane renders its own environment.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cron-starter-web",
+  // The custom entry: the fetch handler @opennextjs/cloudflare generates plus
+  // the `scheduled` handler Cron Triggers call (see worker.ts).
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // The seven schedules vercel.json declared, verbatim. Each fires the
+  // scheduled handler with its expression; lib/crons.ts maps the expression
+  // back to the interval whose route Vercel called (/api/cron/<interval>).
+  "triggers": {
+    "crons": [
+      "* * * * *",
+      "*/10 * * * *",
+      "0 * * * *",
+      "0 */12 * * *",
+      "0 0 * * *",
+      "0 0 * * 0",
+      "0 0 1 * *"
+    ]
+  },
+  // The last-run store — Workers KV in place of Vercel KV.
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "00000000000000000000000000000001"
+    }
+  ]
+}

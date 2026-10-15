@@ -82,7 +82,10 @@ apps/web/component.yaml secretEnv  WIRING_CLOUDFLARE_KV_<ENV>
 ```
 
 `wrangler.template.jsonc` carries `@@wiring(cloudflare-kv/__ENV__:app_kv_id)@@`;
-the rendered `wrangler.jsonc` is git-ignored. `next dev` reaches the local
+the rendered `wrangler.jsonc` is committed as the fixture render (CR4: the
+deploy lane checks it exists before it builds — risk CR-H) and re-rendered
+by every lane's build, `main` and `triggers.crons` included. `dev`, which no
+root applies to, renders the fixture (CR-I). `next dev` reaches the local
 KV through `initOpenNextCloudflareForDev()` (wrangler's platform proxy), so
 the fixture render is enough for local work; `next dev` has no scheduler,
 so firing a trigger locally is `opennextjs-cloudflare preview` or
@@ -97,11 +100,13 @@ apps/web                      the template (pages/, components/, public/) + the 
   lib/kv.ts                   @vercel/kv's set/get over the KV binding (JSON)
   lib/crons.ts                the seven schedules ↔ intervals
   lib/scheduled.ts            the scheduled handler factory (expression → GET /api/cron/<interval>)
+  lib/site.ts                 the site's name and source link (CR4: the rename seam) + the request origin
   worker.ts                   wrangler `main`: OpenNext's fetch + scheduled
   components/analytics.tsx    the Cloudflare Web Analytics beacon
   wrangler.template.jsonc     worker name, nodejs_compat, ASSETS, triggers.crons, the KV binding as a wiring token
-  wiring.fixture.json         offline ids for the verify lane
-  component.yaml              render for the environment, build with turbo, deploy, smoke /
+  wiring.fixture.json         offline ids for local work and the verify lanes (dev, stage, prod)
+  wrangler.jsonc              the fixture render, committed (CR4)
+  component.yaml              render for the environment, build with turbo, deploy, smoke /api/data/1m
   cloudflare-env.d.ts         the bindings' types and the runtime slice the entry uses
 infra/terraform/cloudflare-kv the namespace per environment (Cirrus's root, generic name)
 tests/web                     vitest: the table, the scheduled handler, the kv shim, the two routes — all against mocks
@@ -135,3 +140,77 @@ requesting a URL. Rejected because:
 The custom entry is the adapter's documented way to add a `scheduled`
 handler (its "custom worker" howto); wrangler bundles the generated
 `.open-next/worker.js` into it, and nothing about the Next build changes.
+
+## 8. The baseline (CR4)
+
+The repository instantiates new products the way
+[cirrus-baseline](https://github.com/sourceplane/cirrus-baseline) does since
+its one-landing bootstrap (`baseline-v22`): a console card (`blueprint.yaml`)
+the platform renders, a build document (`repo-blueprint.yaml`) `orun new`
+runs, and a rename engine that makes the copy somebody else's. What a small
+product carries besides — the product README, the context pack, the
+deployment-record hook, the bootstrap helpers and the offline test suite —
+is `portfolio-starter-kit`'s `baseline-v2`, as `kv-redis-starter` (KR4)
+ported it for a KV-bound Next app; this is that port with a scheduled
+handler.
+
+| | portfolio-starter-kit (`baseline-v2`) | cirrus-baseline (`baseline-v22`) | here |
+|---|---|---|---|
+| phases | three: `01-scaffold`, `02-site`, `03-docs` | `01-product`, `07-domain` (optional), `08-docs` | two: `01-product`, `02-docs` |
+| the order a landing used to hold | the scaffold before the site | the data plane before the fleet, the fleet before its bindings | the KV namespace before the Worker that binds it (and whose triggers write to it) |
+| how the plan holds it instead | — | enforced `dependsOn` on main (advisory on a PR) | `apps/web` `dependsOn: cloudflare-kv`, `mode: enforced` with `modeRules` advisory on `github-pull-request` |
+| brokered secrets | `CLOUDFLARE_API_TOKEN` (`workers-deploy`), `CLOUDFLARE_ACCOUNT_ID` | + `CLOUDFLARE_D1_TOKEN` (`d1-edit`) | the portfolio's two: `workers-deploy` covers KV Storage write and the Worker's triggers, so one token applies the namespace and deploys the Worker |
+| the landing's await | watch, probe | watch, `WIRING_CLOUDFLARE_D1`/`_KV` exist on stage and prod, probe | watch, `WIRING_CLOUDFLARE_KV` exists on stage and prod, probe |
+| the deploy's smoke | the page's marker text | each Worker's own health | a run the every-minute trigger recorded, read back from KV (`/api/data/1m`) |
+| stack-tectonic | 0.19.0 | 0.20.0 | 0.19.0 (Next 16's Turbopack) |
+
+**One landing.** `01-product` places every module, brands the tree, and
+lands it as one pull request whose checks it waits for (Checks: install, the
+fixture render, typecheck, lint, test, build). The convergence after the
+merge plans `cloudflare-kv` (apply) and `web` (deploy) on stage and prod; the
+web lanes are one level below the KV lanes, so each Worker deploy starts
+after its environment's apply — and since a job resolves its secrets when it
+starts, the `WIRING_CLOUDFLARE_KV_<ENV>` it renders from is there. Each
+deploy registers its Worker's seven Cron Triggers, and its smoke waits (with
+backoff, ~4.5 minutes) for the every-minute one to record a run (CR-J).
+Stage and prod run side by side (the promotion gate is deferred until
+`02-docs`), and dev's push lanes are deferred too. The landing then waits on
+the convergence (`orun.run/watch@v1`, resuming failed lanes up to three
+times), asks the platform that the wiring exists on both environments
+(`orun.secrets/exists@v1`), and probes both URLs. `02-docs` places nothing:
+it restores the two deferrals, renders the deployment record (with each
+environment's last recorded run) and lands it.
+
+**The cron path survives the staged build.** The scheduled handler is not in
+OpenNext's generated worker; it is in the committed entry `worker.ts`, which
+wrangler bundles with the generated `.open-next/worker.js`. The triggers are
+in the template the build re-renders. So nothing the build generates carries
+either: the entry is a source file the job tree is staged with, the
+re-render keeps `main` and `triggers.crons` (the placement and e2e tiers
+assert both, the latter on the config the lane's own build wrote), and the
+dry run bundles the entry with the generated worker.
+
+**Identity in the app** is `apps/web/lib/site.ts`: `SITE_NAME` (the heading
+and `<title>`) and `SOURCE_URL` (the layout's repository link and its
+"Clone & Deploy" button). The name is written with `JSON.stringify`, so any
+name the card's pattern admits stays a valid string. The slug also names the
+KV namespace titles (`stg-<slug>-app-kv-stage`) through terraform's `repo`,
+so two products in one account never collide on a title.
+
+**No `SITE_URL`.** The only absolute link the page renders to itself is the
+Open Graph image. `pages/index.tsx` renders per request and takes the
+request's own origin (`getServerSideProps` → `requestOrigin`): right on
+workers.dev, on a custom domain and under `wrangler dev`, with nothing to
+configure. The Cron Triggers need no hostname at all: the scheduled handler
+calls the fetch handler in-process.
+
+**Testing without the platform.** `testing/lib/bootstrap.sh` places both
+phases and runs the blueprint's own `run:` hooks, read out of the document;
+`testing/placement.test.sh` plans the product's own merge (the KV apply
+first) and a pull request (nothing waits); `testing/wire.test.sh` holds the
+wiring path together; `testing/e2e.test.sh` builds the product in the tree
+orun stages, with the stage wiring document in the job's environment,
+dry-deploys it, serves it with `wrangler dev --test-scheduled`, checks that
+the component's own smoke refuses it before any trigger fired, fires all
+seven expressions through the scheduled handler, reads every record back
+and runs the smoke again.

@@ -1,0 +1,36 @@
+apiVersion: orun.io/v1
+kind: TaskContract
+metadata:
+  name: CR-5
+  title: "A baseline, in one landing"
+spec:
+  goal: The repository is an Orun baseline — a card and a build document that take a new product from nothing to live on stage and prod in ONE landing, the KV namespace applied before the Worker that binds it and whose Cron Triggers write to it, branded as its own, with gates that prove it offline
+  affects:
+    - blueprint.yaml
+    - repo-blueprint.yaml
+    - BOOTSTRAP.md
+    - README.md
+    - .baseline/**
+    - tooling/rebrand/**
+    - tooling/bootstrap/**
+    - tooling/wire/**
+    - hooks/**
+    - testing/**
+    - docs/phases/**
+    - ai/context/**
+    - .github/workflows/**
+    - .gitignore
+    - intent.yaml
+    - packages/.gitkeep
+    - apps/web/**
+    - tests/web/**
+    - infra/terraform/cloudflare-kv/**
+    - specs/**
+    - tasks/**
+  doneWhen:
+    - orun (the bootstrap floor, the lane pin and the current CLI) reads repo-blueprint.yaml, and the card agrees with it
+    - the product's own push-to-main plan applies cloudflare-kv before it deploys web, on stage and prod, and a pull request waits on nothing
+    - the leak gate, the wiring contract, the offline bootstrap and the end-to-end tier (the scheduled handler fired in the built Worker, its record read back) are green in Baseline CI
+    - the as-built status records the departures and what is not yet proven live
+  gates:
+    - checks
