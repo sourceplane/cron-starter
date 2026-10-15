@@ -88,26 +88,26 @@ variable "terraformVersion" {
   default = "1.15.3"
 }
 
-# --- KV namespace for api-edge idempotency replay store ---
+# --- The KV namespace the cron runs record into ---
 #
-# Backs the app's key-value needs (session, cache, counters). Keys are
-# scoped by the app and entries TTL'd via the
-# Worker (`expirationTtl`); no Terraform-side TTL knob exists
-# for KV namespaces themselves — TTL is per-PUT, owned by the Worker.
+# Bound by apps/web as KV. Keys are the seven intervals (`1m` … `1mo`), each
+# holding its schedule's last run; any expiry is per-PUT (`expirationTtl`),
+# owned by the Worker — no Terraform-side TTL knob exists for KV namespaces
+# themselves.
 
 locals {
-  # Brand-namespaced with var.repo so the title is unique to this fork. Cloudflare
-  # KV namespace titles must be unique per account, and this fork shares an account
-  # with the baseline (which uses the un-branded title) — without the brand the
-  # create fails with "a namespace with this account ID and title already exists"
-  # (10014). Workers resolve this KV by ID via the wiring secret, so the title is
+  # Built on var.repo (the product's repository slug) so the title is unique per
+  # product. Cloudflare KV namespace titles must be unique per account, and two
+  # products may share an account — without the slug the second create fails
+  # with "a namespace with this account ID and title already exists" (10014).
+  # The Worker binds this namespace by ID via the wiring secret, so the title is
   # free to change.
-  idempotency_namespace_title = "${var.namespacePrefix}${var.repo}-app-kv-${var.environment}"
+  app_kv_title = "${var.namespacePrefix}${var.repo}-app-kv-${var.environment}"
 }
 
 resource "cloudflare_workers_kv_namespace" "app_kv" {
   account_id = var.cloudflare_account_id
-  title      = local.idempotency_namespace_title
+  title      = local.app_kv_title
 }
 
 # --- Wiring manifest (BF5, via orun secrets) ---
@@ -127,7 +127,7 @@ output "wiring" {
 # --- Outputs (non-secret) ---
 
 output "app_kv_id" {
-  description = "Cloudflare Workers KV namespace ID for api-edge idempotency replay store"
+  description = "Cloudflare Workers KV namespace ID the cron runs record into"
   value       = cloudflare_workers_kv_namespace.app_kv.id
 }
 

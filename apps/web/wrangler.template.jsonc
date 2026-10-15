@@ -1,8 +1,11 @@
-// Rendered to wrangler.jsonc (git-ignored) by tooling/wire: the verify lane
-// renders from wiring.fixture.json, the deploy lane from the wiring document
-// the `cloudflare-kv` Terraform root lease-publishes (WIRING_CLOUDFLARE_KV_<ENV>).
-// The workers-assets composition deploys one environment per job with no
-// wrangler `--env`, so `__ENV__` names the environment this is rendered for.
+// The source of wrangler.jsonc, which tooling/wire renders from it: from
+// wiring.fixture.json for local work (`pnpm run wire:fixture`, committed as
+// that render), and on every Orun lane from the wiring document the
+// `cloudflare-kv` Terraform root lease-publishes (WIRING_CLOUDFLARE_KV_<ENV>)
+// — dev, which no root applies to, from the fixture (component.yaml's
+// buildCommand). Edit this file, never wrangler.jsonc. The workers-assets
+// composition deploys one environment per job with no wrangler `--env`, so
+// `__ENV__` names the environment this is rendered for.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cron-starter-web",
@@ -16,19 +19,13 @@
     "binding": "ASSETS"
   },
   "observability": { "enabled": true },
-  // The seven schedules vercel.json declared, verbatim. Each fires the
-  // scheduled handler with its expression; lib/crons.ts maps the expression
-  // back to the interval whose route Vercel called (/api/cron/<interval>).
+  // ONE Cron Trigger, every minute. The seven schedules vercel.json declared
+  // are dispatched from it: lib/crons.ts holds them, and the scheduled handler
+  // runs the route (/api/cron/<interval>) of every schedule whose expression
+  // matches the minute the trigger was scheduled for. One trigger per Worker —
+  // two for stage and prod — fits Workers Free's five per account.
   "triggers": {
-    "crons": [
-      "* * * * *",
-      "*/10 * * * *",
-      "0 * * * *",
-      "0 */12 * * *",
-      "0 0 * * *",
-      "0 0 * * 0",
-      "0 0 1 * *"
-    ]
+    "crons": ["* * * * *"]
   },
   // The last-run store — Workers KV in place of Vercel KV.
   "kv_namespaces": [

@@ -12,10 +12,19 @@ spec:
   # Its own lane per environment: the Next.js build is the longest job in the
   # plan, and a shared lane would wait on it.
   lane: isolated
-  # The KV namespace must exist before this deploys: its id is rendered into
-  # the wrangler config from the cloudflare-kv root's wiring document.
+  # INFRA BEFORE APP. The Worker binds the KV namespace by id, and the id is
+  # rendered into its config during the build from the wiring document the
+  # cloudflare-kv root lease-publishes after its apply. A job resolves its
+  # secrets when it STARTS, so on a merge to main this deploy waits for that
+  # environment's apply (enforced) and the document is there; a pull request
+  # deploys nothing, so nothing on one waits (advisory).
   dependsOn:
     - component: cloudflare-kv
+      mode: enforced
+      modeRules:
+        - mode: advisory
+          when:
+            triggerRef: github-pull-request
   secretEnv:
     WIRING_CLOUDFLARE_KV_STAGE: "secret://cron-starter/cron-starter/stage/WIRING_CLOUDFLARE_KV"
     WIRING_CLOUDFLARE_KV_PROD: "secret://cron-starter/cron-starter/prod/WIRING_CLOUDFLARE_KV"
@@ -52,9 +61,10 @@ spec:
     workerEntrypoint: worker.ts
     assetsDir: .open-next/assets
 
-    # Per-env worker name: cron-starter-web-{dev,stage,prod}. The seven Cron
-    # Triggers in wrangler.jsonc are registered on each deployed Worker, so
-    # stage and prod each write their own namespace on schedule.
+    # Per-env worker name: cron-starter-web-{dev,stage,prod}. The one Cron
+    # Trigger in wrangler.jsonc (every minute; the seven schedules are
+    # dispatched from it) is registered on each deployed Worker, so stage and
+    # prod each write their own namespace on schedule.
     workerName: cron-starter-web
     environmentAwareWorkerName: true
 
@@ -63,13 +73,26 @@ spec:
     workersDevSubdomain: your-workers-subdomain
 
     installCommand: pnpm install --frozen-lockfile
-    # Render this environment's wrangler config from the wiring document, then
-    # build (the verify lane already rendered from the fixture through
-    # `wire:fixture`; a deploy lane re-renders with the real namespace id).
-    buildCommand: node ../../tooling/wire/live.mjs --template wrangler.template.jsonc --out wrangler.jsonc --components cloudflare-kv --env "${ORUN_ENVIRONMENT}" && pnpm exec turbo run build --filter=@app/web
+    # Render this environment's wrangler config, then build. stage and prod
+    # render from the wiring document their cloudflare-kv apply published
+    # (secretEnv above, resolved before the job's first step); dev, which no
+    # root applies to and which only verifies, renders from the committed
+    # fixture. The committed wrangler.jsonc (the fixture render) is what the
+    # composition's verify-app-structure step finds before this runs; the
+    # render keeps its `main` (worker.ts) and its one `triggers.crons` entry.
+    buildCommand: node ../../tooling/wire/live.mjs --template wrangler.template.jsonc --out wrangler.jsonc --components cloudflare-kv --env "${ORUN_ENVIRONMENT}" --fixture wiring.fixture.json --fixture-envs dev && pnpm exec turbo run build --filter=@app/web
 
-    # Smoke: the home page renders and carries the app's marker text.
-    smokeCommand: "html=$(curl -sfL \"${DEPLOYED_URL}/\") && echo \"${html}\" | grep -q 'Cron Triggers on Cloudflare'"
+    # Smoke: the CRON's effect is readable. Every minute the trigger runs
+    # /api/cron/1m through the scheduled handler, which records `fetchedAt`
+    # under `1m` in the KV namespace; /api/data/1m — answered only by the
+    # Worker, reading that namespace — must carry a run time no older than ten
+    # minutes. A page that merely renders proves neither the trigger nor the
+    # binding, and the site's name is the owner's to change. The composition
+    # retries this with backoff (~4.5 min), usually long enough for a first
+    # deploy's new trigger to fire (Cloudflare allows up to 15 minutes; a
+    # rerun of the failed lane covers the rest). The response is buffered
+    # before it is parsed.
+    smokeCommand: "body=$(curl -sf \"${DEPLOYED_URL}/api/data/1m\") && at=$(printf '%s' \"${body}\" | grep -Eo '\"fetchedAt\":[0-9]{13}' | grep -Eo '[0-9]{13}') && [ $(( $(date +%s) - at / 1000 )) -lt 600 ]"
   labels:
     team: platform
     layer: delivery

@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CRON_ORIGIN, makeScheduled } from "@/lib/scheduled";
 
-// The scheduled handler is the bridge between a Cron Trigger (which hands the
-// Worker only the expression that fired) and the template's HTTP route that
-// Vercel used to call on that schedule.
+// The scheduled handler is the bridge between the one Cron Trigger (which
+// hands the Worker its expression and the minute it was scheduled for) and
+// the template's HTTP routes that Vercel used to call on seven schedules.
 const env = { KV: {}, ASSETS: {} } as unknown as CloudflareEnv;
 const ctx = {
   waitUntil: vi.fn(),
   passThroughOnException: vi.fn(),
 } as unknown as ExecutionContext;
 
-const controller = (cron: string): ScheduledController =>
-  ({ cron, scheduledTime: Date.now(), noRetry: vi.fn() }) as unknown as ScheduledController;
+const controller = (cron: string, iso: string): ScheduledController =>
+  ({ cron, scheduledTime: Date.parse(iso), noRetry: vi.fn() }) as unknown as ScheduledController;
+
+const paths = (fetch: { mock: { calls: unknown[][] } }) =>
+  fetch.mock.calls.map(([request]) => new URL((request as Request).url).pathname);
 
 describe("the scheduled handler (lib/scheduled.ts)", () => {
   const fetch = vi.fn(async () => new Response('"OK"', { status: 200 }));
@@ -24,8 +27,8 @@ describe("the scheduled handler (lib/scheduled.ts)", () => {
     log.mockClear();
   });
 
-  it("turns `* * * * *` into a GET of /api/cron/1m through the fetch handler", async () => {
-    await makeScheduled(fetch)(controller("* * * * *"), env, ctx);
+  it("on an ordinary minute runs only /api/cron/1m, through the fetch handler", async () => {
+    await makeScheduled(fetch)(controller("* * * * *", "2026-10-14T09:07:00Z"), env, ctx);
     expect(fetch).toHaveBeenCalledTimes(1);
     const [request, passedEnv, passedCtx] = fetch.mock.calls[0] as unknown as [
       Request,
@@ -40,33 +43,35 @@ describe("the scheduled handler (lib/scheduled.ts)", () => {
     expect(log).toHaveBeenCalledWith('/api/cron/1m 200 "OK"');
   });
 
-  it("routes each of the seven expressions to its own interval", async () => {
-    const table: Array<[string, string]> = [
-      ["*/10 * * * *", "10m"],
-      ["0 * * * *", "1h"],
-      ["0 */12 * * *", "12h"],
-      ["0 0 * * *", "1d"],
-      ["0 0 * * 0", "1w"],
-      ["0 0 1 * *", "1mo"],
+  it("runs every schedule due at the scheduled minute, in table order", async () => {
+    const table: Array<[string, string[]]> = [
+      ["2026-10-14T09:10:00Z", ["1m", "10m"]],
+      ["2026-10-14T12:00:00Z", ["1m", "10m", "1h", "12h"]],
+      ["2026-10-18T00:00:00Z", ["1m", "10m", "1h", "12h", "1d", "1w"]],
+      ["2026-11-01T00:00:00Z", ["1m", "10m", "1h", "12h", "1d", "1w", "1mo"]],
     ];
-    for (const [cron, interval] of table) {
+    for (const [iso, intervals] of table) {
       fetch.mockClear();
-      await makeScheduled(fetch)(controller(cron), env, ctx);
-      const [request] = fetch.mock.calls[0] as unknown as [Request];
-      expect(new URL(request.url).pathname).toBe(`/api/cron/${interval}`);
+      await makeScheduled(fetch)(controller("* * * * *", iso), env, ctx);
+      expect(paths(fetch)).toEqual(intervals.map((i) => `/api/cron/${i}`));
     }
   });
 
-  it("calls nothing for an expression the table does not know", async () => {
-    await makeScheduled(fetch)(controller("5 4 * * *"), env, ctx);
+  it("calls nothing for an expression that is not the Worker's trigger", async () => {
+    await makeScheduled(fetch)(controller("0 0 * * *", "2026-10-15T00:00:00Z"), env, ctx);
     expect(fetch).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledOnce();
   });
 
-  it("fails the invocation when the route does not answer 2xx", async () => {
-    const failing = vi.fn(async () => new Response("boom", { status: 500 }));
+  it("runs the rest when one route fails, then fails the invocation naming it", async () => {
+    const failing = vi.fn(async (request: Request) =>
+      new URL(request.url).pathname === "/api/cron/1h"
+        ? new Response("boom", { status: 500 })
+        : new Response('"OK"', { status: 200 }),
+    );
     await expect(
-      makeScheduled(failing)(controller("0 0 * * *"), env, ctx),
-    ).rejects.toThrow("/api/cron/1d answered 500: boom");
+      makeScheduled(failing)(controller("* * * * *", "2026-10-15T00:00:00Z"), env, ctx),
+    ).rejects.toThrow("/api/cron/1h answered 500: boom");
+    expect(paths(failing)).toEqual(["1m", "10m", "1h", "12h", "1d"].map((i) => `/api/cron/${i}`));
   });
 });

@@ -12,8 +12,6 @@ export default defineConfig([
       // - `getLayout(Component)` in pages/_app.tsx builds the layout during
       //   render (the @vercel/examples-ui pattern).
       "react-hooks/static-components": "off",
-      // - pages/index.tsx types its unused `data` prop as `any`.
-      "@typescript-eslint/no-explicit-any": "off",
       // worker.ts imports the generated `.open-next/worker.js` the way the
       // OpenNext custom-worker howto does: `@ts-ignore` with a reason, because
       // the file does not exist before the build and an `@ts-expect-error`
@@ -30,5 +28,6 @@ export default defineConfig([
     files: ["tailwind.config.js", "postcss.config.js"],
     rules: { "@typescript-eslint/no-require-imports": "off" },
   },
-  globalIgnores([".next/**", ".open-next/**", "next-env.d.ts", "cloudflare-env.d.ts"]),
+  // .wrangler holds the bundles `wrangler dev` writes; never source.
+  globalIgnores([".next/**", ".open-next/**", ".wrangler/**", "next-env.d.ts", "cloudflare-env.d.ts"]),
 ]);

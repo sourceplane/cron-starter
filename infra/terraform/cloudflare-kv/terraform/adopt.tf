@@ -11,7 +11,7 @@
 # carries the brokered CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID and the
 # TF_HTTP_* state credentials, so no extra secrets and no AWS access.
 
-data "external" "adopt_idempotency_namespace" {
+data "external" "adopt_app_kv" {
   program = ["bash", "-c", <<-EOT
     set -euo pipefail
     title="$(jq -r .title)"
@@ -32,12 +32,12 @@ data "external" "adopt_idempotency_namespace" {
   EOT
   ]
   query = {
-    title = local.idempotency_namespace_title
+    title = local.app_kv_title
   }
 }
 
 import {
-  for_each = toset(compact([data.external.adopt_idempotency_namespace.result.id]))
+  for_each = toset(compact([data.external.adopt_app_kv.result.id]))
   to       = cloudflare_workers_kv_namespace.app_kv
   id       = "${var.cloudflare_account_id}/${each.value}"
 }

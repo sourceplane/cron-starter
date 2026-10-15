@@ -8,13 +8,13 @@ The port keeps the template's pages, API routes, component, styles and `@vercel/
 
 | Field | Value |
 |-------|-------|
-| Status | ✅ Shipped — CR0–CR3 landed (#1–#4); KV apply and live deploy gated on a linked workspace |
-| Cluster | **CR** (CR0–CR3) |
+| Status | ✅ Shipped — CR0–CR3 landed (#1–#4); CR4 — a baseline, in one landing (CR-5); KV apply, live deploy and triggers on Cloudflare's clock proven only by a live bootstrap |
+| Cluster | **CR** (CR0–CR4) |
 | Owner(s) | `apps/web` (the page, the routes, the worker entry) · `tests/web` · `infra/terraform/cloudflare-kv` |
 | Builds on | `cirrus-baseline` conventions: the `cloudflare-kv` root and the `@@wiring(...)@@` deploy-time render; `kv-redis-starter`'s shape for a KV-bound Next app |
 | Upstream | [vercel/examples `solutions/cron`](https://github.com/vercel/examples/tree/main/solutions/cron) |
 | Changes | What runs the routes on schedule (Vercel Cron → Cron Triggers through a custom worker entry), where they write (Vercel KV → Workers KV behind `lib/kv.ts`), analytics (beacon), the Workers build, tests, the KV root and the deploy contract; page copy says Cron Triggers and Workers KV |
-| Decisions locked | (1) One Worker: the triggers sit on the Next Worker and the scheduled handler calls the OpenNext fetch handler in-process with a synthetic request — not a second Worker calling the routes over HTTP. (2) The routes stay as written: `lib/kv.ts` mirrors `kv.set`/`kv.get` (JSON values, `"OK"` from `set`). (3) `wrangler.jsonc` is rendered per environment from the wiring document; never committed. (4) The seven schedules are the template's, verbatim, in `triggers.crons` and in `lib/crons.ts`; a test holds the two together. |
+| Decisions locked | (1) One Worker: the triggers sit on the Next Worker and the scheduled handler calls the OpenNext fetch handler in-process with a synthetic request — not a second Worker calling the routes over HTTP. (2) The routes stay as written: `lib/kv.ts` mirrors `kv.set`/`kv.get` (JSON values, `"OK"` from `set`). (3) `wrangler.jsonc` is rendered per environment from the wiring document — and, since CR4, committed as the fixture render, because the deploy lane checks it exists before the build (risk CR-H). (4) The seven schedules are the template's, verbatim, in `lib/crons.ts` (and, until CR4, in `triggers.crons`); a test holds the trigger and the template together. (5) CR4: one landing — the plan, not a landing boundary, orders the namespace before the Worker; the deploy's smoke reads a run the trigger recorded. (6) CR4: one Cron Trigger per Worker (`* * * * *`), the seven schedules dispatched from its scheduled time — two triggers per product, inside Workers Free's five per account. |
 | Gate | CR1 is the first user-visible rung. CR2 applies only with a linked workspace; it is verified by `terraform validate`. |
 | Shipped as | `main` after [#4](https://github.com/sourceplane/cron-starter/pull/4); verified locally under `wrangler dev --test-scheduled` with a local namespace |
 
@@ -33,3 +33,4 @@ The port keeps the template's pages, API routes, component, styles and `@vercel/
 | CR1 — the crons on Workers | `apps/web` (routes, `lib/`, `worker.ts`, the wrangler template + fixture), `tests/web` | `wrangler dev --test-scheduled` runs a trigger through the route and the page reads it back; Checks green |
 | CR2 — the KV namespace from Terraform | `infra/terraform/cloudflare-kv` | the root validates; the wiring keys match the template |
 | CR3 — ready to instantiate | README, as-built status | a reader can run, test, preview, fire a trigger and deploy it |
+| CR4 — a baseline, in one landing | card, build document, rename, bootstrap tooling, tests | a new product goes from nothing to live in one landing, the KV namespace applied before the Worker, its smoke on a recorded run; Baseline CI green |
