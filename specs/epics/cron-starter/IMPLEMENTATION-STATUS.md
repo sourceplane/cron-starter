@@ -142,6 +142,7 @@ every product.
 | `apps/web` smoke | `grep 'Cron Triggers on Cloudflare'` on `/` | `/api/data/1m` carries a `fetchedAt` from the last ten minutes | the cron's effect, read back: the every-minute trigger ran the route through the scheduled handler and the Worker reads its namespace. The name is the owner's (risk CR-J) |
 | `ci.yml` gate | `vars.ORUN_CI == 'true'` | skip only while `intent.yaml` names `ws_CHANGE_ME` | a bootstrap cannot set a repository variable |
 | `checks.yml` | push to main + PRs | PRs + `workflow_dispatch` | `orun.run/watch@v1` takes the newest run on the merge sha from ANY workflow |
+| Cron Triggers | seven per Worker (fourteen per product), the handler mapping the expression that fired to its interval (`intervalFor`) | ONE per Worker, `* * * * *` (`TRIGGER`); the handler runs every schedule in `lib/crons.ts` whose expression matches the trigger's `scheduledTime` (UTC), one after another, and fails the invocation naming any route that failed | Cloudflare counts Cron Triggers per account — five on Workers Free — and the platform cannot check a plan before a deploy; two triggers per product fit Free (risk CR-B, CR-N) |
 | stack-tectonic | 0.18.2 | 0.19.0 | first-deploy retry and smoke backoff; not 0.20.0, whose lane-scoped install Next 16's Turbopack refuses |
 | orun lane pin | v2.78.0 | v2.78.4 | cirrus-baseline's and portfolio's pin |
 | `packages/` | absent — `orun plan` failed: `failed to access discovery root packages` | `packages/.gitkeep` | the discovery roots are required |
@@ -165,8 +166,8 @@ every product.
 - `testing/placement.test.sh` (fixture "Sam's Crons & Schedules" /
   `acme-inc/acme-cron-jobs`; v2.78.4 and v2.79.0): two landings; rebrand
   `--verify` clean; the page, the Worker, the KV titles and every secret ref
-  the product's; `main: worker.ts` and the seven `triggers.crons` kept in the
-  template and the committed render; no file names a factory path;
+  the product's; `main: worker.ts` and the one `* * * * *` trigger kept in
+  the template and the committed render; no file names a factory path;
   workspace re-tenanted, `work:` stripped, promotion and dev lanes restored;
   record rendered. The product's own `orun plan --trigger github-push-main`
   for the 01-product merge: `cloudflare-kv` apply on stage and prod at lane
@@ -179,24 +180,29 @@ every product.
   job tree staged as orun stages it, the stage lane's `verify-app-structure`,
   `build-app` (the live render, from a stage document in the job's
   environment), `verify-build-output` and `deploy-dry-run` pass, binding `KV`
-  to the document's id; the built config keeps `main: worker.ts` and the
-  seven triggers and `.open-next/worker.js` exists for it. `wrangler dev
+  to the document's id; the built config keeps `main: worker.ts` and its one
+  trigger and `.open-next/worker.js` exists for it. `wrangler dev
   --test-scheduled` serves the built Worker: the component's own smoke
-  REFUSES it before any trigger fired; each of the seven expressions fired
-  through `/__scheduled` logs `/api/cron/<interval> 200 "OK"` from the
-  scheduled handler and its record reads back through `/api/data/<interval>`
-  (an undeclared expression runs nothing); the smoke then PASSES. `/`
+  REFUSES it before any trigger fired; `/__scheduled?cron=*+*+*+*+*` runs
+  `/api/cron/1m` (logged `200 "OK"` by the scheduled handler); at eight
+  crafted scheduled times (`/cdn-cgi/local/scheduled?…&time=`, since
+  `/__scheduled` always stamps the present) exactly the schedules due then
+  run — 1m always, 10m, 1h, 12h, 1d, 1w on a Sunday and not a Monday, 1mo
+  on the 1st — and every other record stays; every record reads back
+  through `/api/data/<interval>`; a foreign expression runs nothing; the
+  smoke then PASSES. `/`
   carries the product's name (heading and `<title>`), its repository links,
   a description, the seven schedules and an Open Graph image absolute on
   the origin asked; `GET /api/cron/1h` runs that schedule on request; the
   thumbnail, the favicon and a 404 are served.
 - Repository checks: `pnpm install --frozen-lockfile`, `wire:fixture` (no
-  diff), typecheck, lint (no warnings), test (22), build (`/` and both API
+  diff), typecheck, lint (no warnings), test (34: the matcher at crafted
+  times, the dispatcher, the routes, the seam), build (`/` and both API
   routes dynamic; Worker + assets) green.
 - `terraform validate` green on `infra/terraform/cloudflare-kv` (1.15.3).
 - Not verified: a live bootstrap against a workspace — the KV apply, a real
-  deploy registering fourteen triggers on a Workers Paid account, a trigger
-  firing on Cloudflare's clock, the probes (risk CR-K).
+  deploy registering its trigger, the trigger firing on Cloudflare's clock,
+  the probes (risk CR-K).
 
 ## Verified (CR0–CR3)
 

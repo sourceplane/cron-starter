@@ -24,17 +24,21 @@
 #      so the namespace id in the built config is asserted to be the
 #      document's, not the fixture's — and the config the build rendered is
 #      asserted to keep the Worker's custom entry (`worker.ts`, which adds the
-#      scheduled handler) and its seven Cron Triggers;
+#      scheduled handler) and its ONE Cron Trigger (every minute; the seven
+#      schedules are dispatched from it);
 #   3. serve the built Worker from that tree with `wrangler dev
 #      --test-scheduled` and exercise THE CRON PATH: the component's OWN
 #      `smokeCommand` (the check the real deploy ends with), verbatim, must
-#      REFUSE the Worker before any trigger has fired; then every one of the
-#      seven expressions is fired through the scheduled handler
-#      (`GET /__scheduled?cron=<expression>`), each run must reach
-#      `/api/cron/<interval>` through the OpenNext fetch handler, and each
-#      interval's record is read back through `/api/data/<interval>` — the
-#      route only the Worker answers, reading its KV binding (wrangler dev
-#      provides the namespace locally); then the smoke must PASS. Then every
+#      REFUSE the Worker before any trigger has fired; then the trigger is
+#      fired through the scheduled handler — `GET /__scheduled?cron=*+*+*+*+*`
+#      on the clock, then at crafted scheduled times through wrangler's local
+#      trigger route (`/cdn-cgi/local/scheduled?cron=…&time=…`, because
+#      `/__scheduled` always stamps the present) — and at each time exactly
+#      the schedules due then must run `/api/cron/<interval>` through the
+#      OpenNext fetch handler, every other record staying as it was; each
+#      record is read back through `/api/data/<interval>` — the route only
+#      the Worker answers, reading its KV binding (wrangler dev provides the
+#      namespace locally); then the smoke must PASS. Then every
 #      other route the page promises: the heading and title carry the
 #      product's name, the links its repository, the Open Graph image is
 #      absolute on the origin it was asked on, the static assets are served,
@@ -43,7 +47,7 @@
 #
 # What it cannot do is the platform's half: create the repository, mint the
 # brokered Cloudflare token, apply the namespace, deploy for real, have
-# Cloudflare's clock fire the triggers, and probe workers.dev. The KV root is
+# Cloudflare's clock fire the trigger, and probe workers.dev. The KV root is
 # verified to `terraform validate` (CR2) and its plan is part of every pull
 # request's lanes; the apply needs an account.
 #
@@ -186,7 +190,7 @@ grep -q '"5ca1ab1e5ca1ab1e5ca1ab1e0000a001"' "$work/apps/web/wrangler.jsonc" \
 grep -q 'env.KV' "$scratch/deploy-dry-run.log" && grep -q '5ca1ab1e5ca1ab1e5ca1ab1e0000a001' "$scratch/deploy-dry-run.log" \
   || { echo "FAIL: the dry run does not bind KV to the stage namespace" >&2; tail -20 "$scratch/deploy-dry-run.log" >&2; exit 1; }
 # THE CRON PATH SURVIVES THE BUILD. The scheduled handler lives in the custom
-# entry, not in OpenNext's generated worker, and the triggers in the config the
+# entry, not in OpenNext's generated worker, and the trigger in the config the
 # build re-renders: both must come out of the lane's build intact, and the
 # generated worker the entry imports must exist beside them (the composition's
 # verify-build-output checks only the entry, which is a source file).
@@ -194,12 +198,11 @@ python3 - "$work/apps/web" <<'PY2' || exit 1
 import json, pathlib, re, sys
 app = pathlib.Path(sys.argv[1])
 conf = json.loads(re.sub(r"^\s*//.*$", "", (app / "wrangler.jsonc").read_text(), flags=re.M))
-crons = re.findall(r"cron: '([^']+)'", (app / "lib/crons.ts").read_text())
 problems = []
 if conf.get("main") != "worker.ts":
     problems.append(f"the built config's main is {conf.get('main')!r}, not worker.ts — no scheduled handler")
-if (conf.get("triggers") or {}).get("crons") != crons or len(crons) != 7:
-    problems.append(f"the built config's triggers.crons are {(conf.get('triggers') or {}).get('crons')}, not lib/crons.ts's seven")
+if (conf.get("triggers") or {}).get("crons") != ["* * * * *"]:
+    problems.append(f"the built config's triggers.crons are {(conf.get('triggers') or {}).get('crons')}, not the one every-minute trigger")
 if not (app / ".open-next/worker.js").is_file():
     problems.append("the build left no .open-next/worker.js for worker.ts to import")
 if "scheduled" not in (app / "worker.ts").read_text():
@@ -209,7 +212,7 @@ for p in problems:
 sys.exit(1 if problems else 0)
 PY2
 echo "   the built config binds KV to the stage document's namespace id, keeps worker.ts (fetch + scheduled)"
-echo "   and the seven triggers; .open-next/worker.js is there for it; the dry run accepts the bundle"
+echo "   and its one trigger; .open-next/worker.js is there for it; the dry run accepts the bundle"
 
 # ── 3. serve it, fire its schedules, and smoke it as the deploy does ───────
 echo "── wrangler dev --test-scheduled over the built Worker"
@@ -236,66 +239,107 @@ if run_smoke > "$scratch/smoke-before.log" 2>&1; then
 fi
 echo "     refused: no run recorded yet"
 
-echo "   ▸ every schedule fired through the scheduled handler, each record read back"
+echo "   ▸ the one trigger fired through the scheduled handler, on the clock and at crafted times"
 python3 - "$url" "$tree/apps/web/lib/crons.ts" "$scratch/dev.log" <<'PY'
 import json, re, sys, time, urllib.error, urllib.parse, urllib.request
+from datetime import datetime, timezone
 base, crons_ts, devlog = sys.argv[1], sys.argv[2], sys.argv[3]
-crons = re.findall(r"\{ interval: '([^']+)', cron: '([^']+)' \}", open(crons_ts).read())
+src = open(crons_ts).read()
+crons = re.findall(r"\{ interval: '([^']+)', cron: '([^']+)' \}", src)
+intervals = [i for i, _ in crons]
+trigger = re.search(r"export const TRIGGER = '([^']+)'", src).group(1)
 problems = []
 def bad(m): problems.append(m)
 def get(path):
     try:
-        with urllib.request.urlopen(base + path, timeout=60) as r:
+        with urllib.request.urlopen(base + path, timeout=120) as r:
             return r.status, r.read().decode()
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode()
-if len(crons) != 7:
-    sys.exit(f"lib/crons.ts lists {len(crons)} schedules, not seven")
+def records():
+    out = {}
+    for i in intervals:
+        s, body = get(f"/api/data/{i}")
+        try:
+            out[i] = json.loads(body).get("fetchedAt") if s == 200 else ("error", s)
+        except ValueError:
+            out[i] = ("error", s)
+    return out
+def log():
+    return open(devlog, errors="replace").read()
+if len(crons) != 7 or trigger != "* * * * *":
+    sys.exit(f"lib/crons.ts lists {len(crons)} schedules and the trigger {trigger!r}")
+q = urllib.parse.quote
 
 # Nothing is recorded before a trigger fires: the namespace is the job tree's own.
-for interval, _ in crons:
-    s, body = get(f"/api/data/{interval}")
-    if s != 200 or "fetchedAt" in body:
-        bad(f"/api/data/{interval} answered {s} {body[:80]!r} before any trigger fired")
+for i, at in records().items():
+    if at is not None:
+        bad(f"/api/data/{i} answered {at!r} before any trigger fired")
 
-# An expression no trigger declares runs nothing, and fails nothing.
-s, body = get("/__scheduled?cron=" + urllib.parse.quote("30 4 * * *"))
+# An expression that is not the Worker's trigger runs nothing, and fails nothing.
+s, body = get("/__scheduled?cron=" + q("30 4 * * *"))
 if s != 200:
-    bad(f"an undeclared expression made the scheduled handler answer {s}: {body[:120]!r}")
-
-fired = int(time.time() * 1000)
-for interval, cron in crons:
-    s, body = get("/__scheduled?cron=" + urllib.parse.quote(cron))
-    if s != 200:
-        bad(f"/__scheduled?cron={cron} answered {s}: {body[:160]!r}")
+    bad(f"a foreign expression made the scheduled handler answer {s}: {body[:120]!r}")
 time.sleep(1)
-log = open(devlog, errors="replace").read()
-for interval, cron in crons:
-    # The handler's own line, printed only after the route it requested
-    # through the OpenNext fetch handler answered 2xx.
-    if not re.search(rf'/api/cron/{re.escape(interval)} 200 "OK"', log):
-        bad(f"the scheduled handler did not log a 200 from /api/cron/{interval} for {cron!r}")
-    s, body = get(f"/api/data/{interval}")
-    try:
-        record = json.loads(body)
-    except ValueError:
-        bad(f"/api/data/{interval} answered {s} {body[:80]!r} — not JSON"); continue
-    at = record.get("fetchedAt")
-    if s != 200 or not isinstance(at, int) or not (fired - 5_000 <= at <= int(time.time() * 1000) + 5_000):
-        bad(f"/api/data/{interval} answered {s} with fetchedAt {at!r} — not the run fired at {fired}")
-    if not isinstance(record.get("id"), int):
-        bad(f"/api/data/{interval} carries no Hacker News story id: {body[:120]!r}")
-if "no route for cron \"30 4 * * *\"" not in log:
-    bad("the undeclared expression was not reported by the scheduled handler")
+if 'no route for cron "30 4 * * *"' not in log():
+    bad("the foreign expression was not reported by the scheduled handler")
+if any(at is not None for at in records().values()):
+    bad("a foreign expression wrote a record")
+
+# The trigger, on the clock: /__scheduled (wrangler dev --test-scheduled).
+fired = int(time.time() * 1000)
+s, body = get("/__scheduled?cron=" + q(trigger))
+if s != 200:
+    bad(f"/__scheduled?cron={trigger} answered {s}: {body[:160]!r}")
+time.sleep(1)
+at = records()["1m"]
+if not isinstance(at, int) or not (fired - 5_000 <= at <= int(time.time() * 1000) + 5_000):
+    bad(f"/__scheduled ran no /api/cron/1m: /api/data/1m's fetchedAt is {at!r}")
+if '/api/cron/1m 200 "OK"' not in log():
+    bad("the scheduled handler did not log a 200 from /api/cron/1m")
+
+# The trigger at crafted scheduled times: exactly the schedules due then run.
+CASES = [
+    ("2026-10-14T09:07:00Z", ["1m"]),                                     # an ordinary minute
+    ("2026-10-14T09:10:00Z", ["1m", "10m"]),                              # minute % 10 == 0
+    ("2026-10-14T10:00:00Z", ["1m", "10m", "1h"]),                        # the top of an hour
+    ("2026-10-14T12:00:00Z", ["1m", "10m", "1h", "12h"]),                 # noon
+    ("2026-10-15T00:00:00Z", ["1m", "10m", "1h", "12h", "1d"]),           # midnight, a Thursday
+    ("2026-10-19T00:00:00Z", ["1m", "10m", "1h", "12h", "1d"]),           # midnight, a Monday
+    ("2026-10-18T00:00:00Z", ["1m", "10m", "1h", "12h", "1d", "1w"]),     # midnight, a Sunday (0 0 * * 0)
+    ("2026-12-01T00:00:00Z", ["1m", "10m", "1h", "12h", "1d", "1mo"]),    # midnight on the 1st, a Tuesday
+]
+for iso, due in CASES:
+    when = int(datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000)
+    before = records()
+    time.sleep(0.05)
+    s, body = get(f"/cdn-cgi/local/scheduled?cron={q(trigger)}&time={when}&format=json")
+    if s != 200:
+        bad(f"the trigger at {iso} answered {s}: {body[:200]!r}"); continue
+    after = records()
+    ran = [i for i in intervals if after[i] != before[i]]
+    if ran != due:
+        bad(f"the trigger at {iso} ran {ran}; due then: {due}")
+    for i in due:
+        if not isinstance(after[i], int):
+            bad(f"/api/data/{i} answered {after[i]!r} after the trigger at {iso}")
+
+final = records()
+for i in intervals:
+    s, body = get(f"/api/data/{i}")
+    record = json.loads(body) if s == 200 else {}
+    if not isinstance(record.get("fetchedAt"), int) or not isinstance(record.get("id"), int):
+        bad(f"/api/data/{i} does not read its run back (fetchedAt and a Hacker News story id): {body[:120]!r}")
 if problems:
     for p in problems:
         print(f"  ✕ {p}", file=sys.stderr)
     sys.exit(1)
-print(f"     {len(crons)} expressions fired → /api/cron/<interval> 200 through the fetch handler →")
-print(f"     /api/data/<interval> reads each run back from KV; an undeclared expression runs nothing")
+print(f"     /__scheduled?cron={trigger} ran /api/cron/1m; at {len(CASES)} crafted times exactly the due schedules ran")
+print(f"     (1m always · 10m · 1h · 12h · 1d · 1w on Sunday · 1mo on the 1st), the rest untouched; a foreign")
+print(f"     expression runs nothing; all {len(intervals)} records read back through /api/data/<interval>")
 PY
 
-echo "   ▸ the component's own smokeCommand, after the triggers fired"
+echo "   ▸ the component's own smokeCommand, after the trigger fired"
 run_smoke > "$scratch/smoke-after.log" 2>&1 \
   || { echo "FAIL: the deploy's smoke refused a Worker whose every-minute trigger has run" >&2; cat "$scratch/smoke-after.log" >&2; exit 1; }
 echo "     passed: /api/data/1m carries the run the trigger recorded"

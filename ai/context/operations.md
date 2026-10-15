@@ -18,11 +18,12 @@ alone, expressed as an Orun component-native desired-state repo.
   publishes a wiring document — `{app_kv_id, app_kv_title}` — as the Orun
   secret `WIRING_CLOUDFLARE_KV` on that environment.
 - **`apps/web`** — one Worker: Next.js built by `@opennextjs/cloudflare`
-  plus Static Assets, with seven **Cron Triggers** (`triggers.crons` in
-  `wrangler.template.jsonc`, the same expressions as `lib/crons.ts`). Its
-  entry, `worker.ts`, is OpenNext's fetch handler plus a `scheduled` handler
-  that turns the expression that fired into `GET /api/cron/<interval>`
-  through that fetch handler. The route fetches the newest Hacker News story
+  plus Static Assets, with ONE **Cron Trigger**, every minute (`triggers.crons`
+  in `wrangler.template.jsonc`). Its entry, `worker.ts`, is OpenNext's fetch
+  handler plus a `scheduled` handler that checks the seven schedules in
+  `lib/crons.ts` against the minute the trigger was scheduled for (UTC) and
+  turns each one that is due into `GET /api/cron/<interval>` through that
+  fetch handler. The route fetches the newest Hacker News story
   id and writes `{ fetchedAt, id }` under the interval's key in the `KV`
   binding; `/api/data/<interval>` reads it back with the story, and the page
   polls it for each schedule.
@@ -59,9 +60,9 @@ before anything else.
    document is there.
 4. `apps/web` renders `wrangler.jsonc` from that document (the real
    namespace id), builds once per environment, and `wrangler deploy` ships
-   `cron-starter-web-<env>` with its seven Cron Triggers. The smoke test
-   fetches `/api/data/1m` and requires a `fetchedAt` from the last ten
-   minutes — proof the every-minute trigger ran the route, the Worker wrote
+   `cron-starter-web-<env>` with its Cron Trigger. The smoke test fetches
+   `/api/data/1m` and requires a `fetchedAt` from the last ten minutes —
+   proof the trigger ran the every-minute schedule's route, the Worker wrote
    its namespace, and reads it back. It retries for about four and a half
    minutes, because a new trigger can take minutes to start firing.
 5. `prod` deploys after `stage` has converged on the same commit
@@ -82,10 +83,9 @@ Caveats that matter:
   redeploys nothing on its own. Land it with a change under `apps/web`.
 - `wrangler.jsonc` is generated. Edit `wrangler.template.jsonc` and run
   `pnpm run wire:fixture`; Checks fails when the two disagree.
-- Cron Triggers are per account: Workers Free allows five, and stage and prod
-  register seven each, so the account must be on Workers Paid or the deploy
-  is refused. A product that needs fewer schedules trims `triggers.crons` and
-  `lib/crons.ts` together.
+- Cron Triggers count per account (Workers Free allows five). This site
+  registers one per deployed Worker — two in all — and dispatches its seven
+  schedules from it. Add schedules to `lib/crons.ts`, not triggers.
 - A trigger change can take up to fifteen minutes to reach every Cloudflare
   location. A smoke that ran out of retries right after a FIRST deploy is
   that; re-run the failed lane.
@@ -98,7 +98,7 @@ Caveats that matter:
   `workers-deploy` scope: Workers Scripts and KV Storage write) and
   `CLOUDFLARE_ACCOUNT_ID` — pointers minted per run from the workspace's
   Cloudflare connection. No long-lived values at rest; nothing to rotate by
-  hand. The KV root and the Worker deploy (its triggers included) use the
+  hand. The KV root and the Worker deploy (its trigger included) use the
   same two.
 - **Wiring**: `WIRING_CLOUDFLARE_KV` on `stage` and `prod`, written by the
   KV root's apply (lease-published), read by the Worker's build as
@@ -129,7 +129,7 @@ orun integrations list --org <ws> --json && orun cloud check --org <ws>
 | task | how |
 |---|---|
 | change the page | edit `apps/web/pages/index.tsx` (its name and links: `apps/web/lib/site.ts`), merge |
-| change a schedule | edit the expression in `triggers.crons` (`apps/web/wrangler.template.jsonc`) AND in `apps/web/lib/crons.ts`, run `pnpm run wire:fixture`, merge — the test fails if the two disagree |
+| change a schedule | edit its expression in `apps/web/lib/crons.ts` (and the one `pages/index.tsx` shows), merge. The trigger stays `* * * * *`: the scheduled handler dispatches every schedule from it |
 | run a schedule now | `curl https://<worker>/api/cron/<interval>` (the route is public) |
 | deploy a change | merge to `main`; watch the run; failed lanes → `gh run rerun --failed` |
 | redeploy without a change | edit the last line of `apps/web/component.yaml` (`# orun: redeploy <reason> <stamp>`) and merge — it is a deploy trigger, nothing reads it |

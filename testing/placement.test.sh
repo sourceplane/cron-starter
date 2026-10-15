@@ -15,7 +15,7 @@
 #      deferrals and their restore, the lockfile, the deployment record), each
 #      landing a commit;
 #   3. the product it ends with: branded with no residue — the page, the
-#      Worker (its custom entry and seven Cron Triggers kept), the KV
+#      Worker (its custom entry and its one Cron Trigger kept), the KV
 #      namespace titles and every secret ref its own — carrying
 #      nothing of the factory and naming none of it, re-tenanted, its gates
 #      restored, its record rendered;
@@ -146,11 +146,16 @@ if web["parameters"]["workerName"] != f"{repo}-web":
 if web["parameters"]["workersDevSubdomain"] != sub:
     bad(f"workersDevSubdomain is {web['parameters']['workersDevSubdomain']}, not {sub}")
 # The Worker's config: the product's name, and the cron wiring kept — the
-# custom entry that adds the scheduled handler, and the seven triggers that
-# call it, equal to the table the handler reads.
-crons = re.findall(r"cron: '([^']+)'", (tree / "apps/web/lib/crons.ts").read_text())
+# custom entry that adds the scheduled handler, and the ONE trigger that calls
+# it (every minute; the seven schedules are dispatched from it — one trigger
+# per Worker keeps a product inside Workers Free's five per account).
+crons_ts = (tree / "apps/web/lib/crons.ts").read_text()
+crons = re.findall(r"cron: '([^']+)'", crons_ts)
+trigger = re.search(r"export const TRIGGER = '([^']+)'", crons_ts)
 if len(crons) != 7:
     bad(f"apps/web/lib/crons.ts lists {len(crons)} schedules, not seven")
+if not trigger or trigger.group(1) != "* * * * *":
+    bad("apps/web/lib/crons.ts declares no every-minute TRIGGER")
 for cfg in ("wrangler.jsonc", "wrangler.template.jsonc"):
     text = (tree / "apps/web" / cfg).read_text()
     if f'"name": "{repo}-web"' not in text:
@@ -158,8 +163,8 @@ for cfg in ("wrangler.jsonc", "wrangler.template.jsonc"):
     conf = json.loads(re.sub(r"^\s*//.*$", "", text, flags=re.M))
     if conf.get("main") != "worker.ts":
         bad(f"apps/web/{cfg}'s main is {conf.get('main')!r} — the scheduled handler lives in worker.ts")
-    if (conf.get("triggers") or {}).get("crons") != crons:
-        bad(f"apps/web/{cfg}'s triggers.crons are not lib/crons.ts's seven")
+    if (conf.get("triggers") or {}).get("crons") != ["* * * * *"]:
+        bad(f"apps/web/{cfg}'s triggers.crons are {(conf.get('triggers') or {}).get('crons')}, not the one every-minute trigger")
 if web["parameters"].get("workerEntrypoint") != "worker.ts":
     bad(f"workerEntrypoint is {web['parameters'].get('workerEntrypoint')}, not worker.ts")
 if not (tree / "apps/web/worker.ts").exists() or "scheduled" not in (tree / "apps/web/worker.ts").read_text():
@@ -231,7 +236,7 @@ if problems:
         print(f"  ✕ {p}", file=sys.stderr)
     sys.exit(1)
 print(f"   {len(tracked)} tracked files; branded (page, Worker, KV titles, secret refs), the cron entry "
-      f"and its seven triggers kept, no factory path named, re-tenanted, gates restored, record rendered")
+      f"and its one trigger kept, no factory path named, re-tenanted, gates restored, record rendered")
 PY
 
 # ── 4. the product's own CI, over the 01-product merge ─────────────────────

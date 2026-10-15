@@ -9,7 +9,7 @@ when wanted, is a Worker secret the scheduled handler sends as a header and
 the route checks — `lib/scheduled.ts` already builds the `Request`, so it is
 one header there and one comparison in the route.
 
-## CR-B — Cron Triggers per account (ACCEPTED in CR4: the card asks for Workers Paid)
+## CR-B — Cron Triggers per account (RESOLVED in CR4: one trigger per Worker)
 
 Seven triggers per Worker, one Worker per environment: fourteen on the
 account for stage + prod. Cloudflare caps Cron Triggers per account by plan
@@ -19,8 +19,15 @@ loudly when the cap is hit. The schedules are the template's, verbatim; a
 product that only needs some of them trims `triggers.crons` and
 `lib/crons.ts` together (the test holds them equal). Since CR4 the
 baseline's card, its BOOTSTRAP and the product's README and operating
-contract all say the account needs Workers Paid; the platform has no way to
-check a plan before the deploy, so on Free the first deploy is what refuses.
+contract all said the account needed Workers Paid — but the platform has no
+way to check a plan before the deploy, so on Free the first deploy was what
+refused. Resolved instead: the Worker registers ONE Cron Trigger, every
+minute, and the scheduled handler runs every schedule whose expression
+matches the trigger's `scheduledTime` (UTC). Two triggers per product, stage
+and prod, inside Free's five; the seven schedules unchanged, and still the
+expressions the page shows. An account that already holds four or five
+triggers from other Workers can still refuse one more; the product's docs
+name that case.
 
 ## CR-C — KV is not Redis (ACCEPTED)
 
@@ -72,7 +79,7 @@ prod; pull request or merge) would have failed at that step: no lane had
 ever run (`ORUN_CI` was never set). Fix: commit `wrangler.jsonc` as the
 fixture render of `wrangler.template.jsonc` (with a GENERATED banner); the
 build still re-renders it for its environment, keeping `main: worker.ts` and
-the seven `triggers.crons`. Checks fails when the two disagree
+its `triggers.crons`. Checks fails when the two disagree
 (`git diff --exit-code` after `wire:fixture`), and `testing/wire.test.sh`
 checks the same. `testing/e2e.test.sh` runs the step in a staged tree.
 
@@ -90,8 +97,8 @@ stage and prod still need the real document and refuse without it
 ## CR-J — The deploy's smoke waits on a trigger (ACCEPTED)
 
 The smoke reads `/api/data/1m` and requires a `fetchedAt` from the last ten
-minutes: a run the every-minute Cron Trigger recorded through the scheduled
-handler. On every later deploy the schedule is already running and the
+minutes: a run of the every-minute schedule, which the Cron Trigger runs
+through the scheduled handler at every firing. On every later deploy the schedule is already running and the
 smoke passes at once. On the FIRST deploy it passes only once the new
 trigger has fired; Cloudflare says a trigger change "may take several
 minutes (up to 15 minutes)" to propagate, and the composition's smoke
@@ -112,13 +119,14 @@ the wiring path, the offline bootstrap with the blueprint's own hooks, the
 product's own plan (the KV apply before the Worker's deploy; nothing waiting
 on a pull request), and the produced product built in the job tree,
 dry-deployed with the stage document's namespace id, served under
-`wrangler dev --test-scheduled` with every schedule fired through the
-scheduled handler and read back, and smoke-tested. NOT proven: the
+`wrangler dev --test-scheduled` with the trigger fired through the
+scheduled handler at crafted times that make each schedule due and every
+record read back, and smoke-tested. NOT proven: the
 repository created and linked, the token minted by `integrations/reconcile`,
 a real `terraform apply` (the root is held to `terraform validate`; its
 `adopt.tf` lookup calls the Cloudflare API), the lease-published document, a
-real `wrangler deploy` registering fourteen triggers on a Workers Paid
-account, the triggers firing on Cloudflare's clock, the probes. Hence the
+real `wrangler deploy` registering its trigger, the trigger firing on
+Cloudflare's clock, the probes. Hence the
 registry row is `unlisted` until one bootstrap from the tag has come up.
 
 ## CR-L — The bootstrap floor plans every edge enforced (ACCEPTED)
@@ -136,4 +144,17 @@ Attaching a domain to a Worker needs zone permissions the brokered
 `workers-deploy` token does not carry, and `dns-edit` needs zone ids a build
 does not have. The product's README says how to attach one; nothing in the
 repository changes, because the page takes its origin from the request and
-the triggers need no hostname.
+the trigger needs no hostname.
+
+## CR-N — Seven schedules on one trigger (ACCEPTED)
+
+Every schedule now depends on the one every-minute invocation. If Cloudflare
+drops the invocation for a minute, every schedule due in that minute misses
+its run (the daily run at 00:00, say) — before CR4 each had its own trigger,
+which could drop just as well, one at a time. Within an invocation the
+schedules run one after another, and a route that fails does not stop the
+rest; the invocation then fails, naming each. Due-ness is computed from
+`scheduledTime`, the minute the run was scheduled for, not the clock when it
+starts, so a late start still runs the right schedules. The weekly schedule
+is `0 0 * * 0` — Sunday, as in the template's `vercel.json` and on the page —
+not Monday.

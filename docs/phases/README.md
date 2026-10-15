@@ -46,7 +46,7 @@ There is no custom-domain phase. Attaching a domain to a Worker needs zone
 permissions the platform's brokered `workers-deploy` token does not carry, so
 it is an owner's step after the bootstrap — the site's README, "Custom
 domain", says how. Nothing in the repository changes for it: the page builds
-its absolute links from the request, and the triggers need no hostname.
+its absolute links from the request, and the trigger needs no hostname.
 
 ## Inputs
 

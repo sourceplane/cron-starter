@@ -48,8 +48,9 @@ README (run, test, preview, fire a trigger, deploy; the schedules table),
 and `tag.yml` (design §8); and what the product needed to deploy from a
 fresh repository: `wrangler.jsonc` committed, dev rendering the fixture,
 `apps/web`'s enforced `dependsOn: cloudflare-kv` on main, `packages/`, a
-smoke on a recorded run, the `lib/site.ts` seam and an absolute Open Graph
-image from the request.
+smoke on a recorded run, ONE Cron Trigger per Worker with the seven
+schedules dispatched from its scheduled time (inside Workers Free), the
+`lib/site.ts` seam and an absolute Open Graph image from the request.
 
 **Done when**
 - orun at the bootstrap floor (v2.58.11), the lane pin (v2.78.4) and the
@@ -58,9 +59,9 @@ image from the request.
 - the product's own push-to-main plan applies `cloudflare-kv` before it
   deploys `web` on stage and prod (`testing/placement.test.sh`)
 - `Baseline CI` is green: the contract tests, the wiring path, the leak gate,
-  the offline bootstrap and the end-to-end tier — which fires every schedule
-  through the scheduled handler in the built Worker and reads each record
-  back
+  the offline bootstrap and the end-to-end tier — which fires the trigger
+  through the scheduled handler in the built Worker at times that make each
+  schedule due and reads each record back
 - the status file records what is proven offline and what only a live
   bootstrap can prove
 
@@ -69,16 +70,15 @@ image from the request.
 1. Cut `baseline-v1` with `tag.yml` from the merged `main`.
 2. Register the row in orun-cloud's `infra/baselines-registry/baselines.yaml`
    (unlisted) with the card vendored at the tag.
-3. Bootstrap one product from the tag against a workspace whose Cloudflare
-   account is on Workers Paid; record its timings and how long the first
-   trigger took to fire; then flip the row to public with a page on
-   orunbase.com.
+3. Bootstrap one product from the tag against a workspace; record its
+   timings and how long the first trigger took to fire; then flip the row to
+   public with a page on orunbase.com.
 
 ## Sequencing note
 
 CR1's component already names the root's wiring secret; CR2 makes the name
 true. Applying CR2 needs a workspace with a Cloudflare connection; until
 then the Orun lane plans nothing (`ws_CHANGE_ME`) and `Checks` is the merge
-gate. The triggers register on the first real deploy — nothing fires until
+gate. The trigger registers on the first real deploy — nothing fires until
 then. CR4 packages CR1–CR2 as a baseline whose one landing applies CR2's
 root before it deploys CR1's Worker.

@@ -21,12 +21,13 @@ metadata:
     Vercel's Cron Jobs example as a product of its own: seven schedules, from
     every minute to monthly, each recording the newest Hacker News story and
     its run time, and a page that shows every schedule's last run. Built by
-    OpenNext into one Cloudflare Worker with Static Assets whose Cron
-    Triggers call its own API routes, the runs in a Workers KV namespace
-    Terraform provisions per environment, and CI that applies the namespace
-    and deploys the Worker to stage and prod on merge. One provider, one
-    consent, one token; the Cloudflare account needs Workers Paid for the
-    fourteen triggers. Live in about fifteen minutes, in one landing.
+    OpenNext into one Cloudflare Worker with Static Assets whose one
+    every-minute Cron Trigger dispatches the seven schedules to its own API
+    routes, the runs in a Workers KV namespace Terraform provisions per
+    environment, and CI that applies the namespace and deploys the Worker to
+    stage and prod on merge. One provider, one consent, one token; the
+    Workers Free plan is enough. Live in about fifteen minutes, in one
+    landing.
   tags: [cron, scheduled, cloudflare, nextjs, kv, terraform]
 spec:
   source:
@@ -36,13 +37,13 @@ spec:
   # ── What the operator reads first ────────────────────────────────────────
   overview:
     lede: >
-      Scheduled work without a server: seven Cron Triggers on one Next.js
-      Worker run its own API routes and record each run in Workers KV, and
-      the page reads them back. Merge, and the namespace is applied before
+      Scheduled work without a server: one Cron Trigger on a Next.js
+      Worker dispatches seven schedules to its own API routes, each run
+      recorded in Workers KV, and the page reads them back. Merge, and the namespace is applied before
       the Worker that binds it is deployed.
     architecture:
       - layer: Edge
-        items: [web (page, API routes, Cron Triggers)]
+        items: [web (page, API routes, Cron Trigger)]
       - layer: Data
         items: [Workers KV (cloudflare-kv)]
       - layer: Delivery
@@ -109,7 +110,7 @@ spec:
     - key: CLOUDFLARE_API_TOKEN
       provider: cloudflare
       template: workers-deploy
-      why: Applies the KV namespace and deploys the Worker, its static assets and its Cron Triggers
+      why: Applies the KV namespace and deploys the Worker, its static assets and its Cron Trigger
     - key: CLOUDFLARE_ACCOUNT_ID
       provider: cloudflare
       template: account-id

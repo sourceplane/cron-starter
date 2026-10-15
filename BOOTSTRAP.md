@@ -30,14 +30,13 @@ promotion gate.
   probe deferred for a project not yet created, and `from: workspace`). The
   product's own `ci.yml` pins its lanes separately (v2.78.4), and its plans
   need that pin: the floor does not apply a `dependsOn` edge's `modeRules`.
-- A Cloudflare account on **Workers Paid**. The product registers seven Cron
-  Triggers on each of its stage and prod Workers — fourteen — and Workers
-  Free allows five per account, so on Free the first deploy is refused.
-  Paid's limit is 250. Its **Account API token** needs Workers Scripts Write
-  and Workers KV Storage Write (the console's Connect recipe lists the exact
-  permission groups). It is the ONLY provider credential this baseline
-  needs: the brokered `workers-deploy` scope covers the namespace's apply and
-  the Worker's deploy, its triggers included.
+- A Cloudflare account (the Free plan is enough: the product registers ONE
+  Cron Trigger per Worker, two in all, and dispatches its seven schedules
+  from it; Free allows five per account) and its **Account API token** with
+  Workers Scripts Write and Workers KV Storage Write (the console's Connect
+  recipe lists the exact permission groups). It is the ONLY provider
+  credential this baseline needs: the brokered `workers-deploy` scope covers
+  the namespace's apply and the Worker's deploy, its trigger included.
 - An Orun Cloud workspace for the product — `orunWorkspace`, or the
   workspace the build runs in (ORUN_WORKSPACE) when that is unset — with an
   **admin-role API key** for headless runs (secret writes below admin are
@@ -78,7 +77,7 @@ phase whose files are present but branded derives as `drifted`, and
 
 | phase | what it lands | verified by |
 |---|---|---|
-| `01-product` | the repository, created and linked; the WHOLE product in one PR — intent, CI, tooling, identity, the KV root, the Worker (page, API routes, Cron Triggers) and its tests; the brokered Cloudflare secrets | its PR's checks green and merged; the convergence green (KV applied, then the Worker built, deployed, smoke-tested on a run its every-minute trigger recorded); `WIRING_CLOUDFLARE_KV` on stage and prod; both workers.dev URLs answering |
+| `01-product` | the repository, created and linked; the WHOLE product in one PR — intent, CI, tooling, identity, the KV root, the Worker (page, API routes, Cron Trigger) and its tests; the brokered Cloudflare secrets | its PR's checks green and merged; the convergence green (KV applied, then the Worker built, deployed, smoke-tested on a run its every-minute trigger recorded); `WIRING_CLOUDFLARE_KV` on stage and prod; both workers.dev URLs answering |
 | `02-docs` | `ai/context/deployment.md` from probed facts; prod's promotion gate and dev's push lanes restored | the final probe |
 
 ```bash
@@ -156,9 +155,9 @@ orun new --blueprint repo-blueprint.yaml \
 
 - **Change the page**: `apps/web/pages/index.tsx`; its name and source link
   are `apps/web/lib/site.ts`. Every merge to `main` redeploys.
-- **Change a schedule**: the expression in `triggers.crons`
-  (`apps/web/wrangler.template.jsonc`) and in `apps/web/lib/crons.ts`
-  together, then `pnpm run wire:fixture`; a test holds the two equal.
+- **Change a schedule**: its expression in `apps/web/lib/crons.ts` (and
+  the one the page shows in `pages/index.tsx`). The trigger stays
+  `* * * * *`; the scheduled handler dispatches every schedule from it.
 - **Add a binding** (R2, D1, another namespace): a Terraform root that
   lease-publishes `WIRING_<ROOT>`, a token in `wrangler.template.jsonc`, its
   fixture entry, and in `apps/web/component.yaml` the root in the build's
@@ -168,7 +167,7 @@ orun new --blueprint repo-blueprint.yaml \
   README, "Custom domain"). There is no domain phase: attaching a domain
   needs zone permissions the brokered `workers-deploy` token does not carry.
   Nothing in the repository changes — the page builds its absolute links
-  from the request, and the triggers need no hostname.
+  from the request, and the trigger needs no hostname.
 - **Refresh the record**: re-run `--phase 02-docs`; it is idempotent.
 
 ## 5. Testing this baseline
@@ -190,11 +189,12 @@ the re-tenant, the deferrals and their restore, the lockfile and the
 deployment record all run exactly as a real bootstrap runs them. Only the
 platform's typed actions (task, repo, link, reconcile, land, watch, secrets,
 probe) are stood in for, a landing becoming a commit. The end-to-end tier
-then serves the built Worker with `wrangler dev --test-scheduled`, fires every
-schedule through the scheduled handler and reads each record back. What no
+then serves the built Worker with `wrangler dev --test-scheduled`, fires the
+trigger through the scheduled handler on the clock and at crafted times that
+make each schedule due, and reads each record back. What no
 offline test can do is the platform's half: the namespace applied for real
 (the KV root is held to `terraform validate`), the token minted, the deploy,
-the triggers firing on Cloudflare's clock, the probes.
+the trigger firing on Cloudflare's clock, the probes.
 
 ## 6. Cutting a baseline tag (maintainers)
 
@@ -221,8 +221,8 @@ at the tag and refuses the whole catalogue if it 404s.
 | `01-product` stops at `link` | the repository is not linked to the workspace and the credential cannot link it. Allow-list it (console → Settings → Git repos) and re-run the phase |
 | Secret WRITE fails `not_found` while listings work | the API key's role is below admin; re-mint it with the admin role |
 | KV lane or deploy lane: Authentication error (10000) | the connection's token lacks Workers Scripts or KV Storage write; re-issue it, re-connect, re-run `01-product` |
-| deploy lane: the Cron Triggers are refused for a limit | the account is on Workers Free (five triggers per account; the product needs fourteen). Move it to Workers Paid and re-run `01-product` |
-| web smoke fails after its retries: no recent `fetchedAt` on `/api/data/1m` | the every-minute trigger had not fired yet (a new trigger can take up to fifteen minutes to reach every location), or its run threw — `wrangler tail <reponame>-web-<env>` shows it. The watch resumes the failed lane up to three times |
+| deploy lane: the Cron Trigger is refused for a limit | the account already has five Cron Triggers (the Workers Free limit) from other Workers; this product adds one per environment. Remove a trigger another Worker no longer needs and re-run `01-product` |
+| web smoke fails after its retries: no recent `fetchedAt` on `/api/data/1m` | the trigger had not fired yet (a new trigger can take up to fifteen minutes to reach every location), or its run threw — `wrangler tail <reponame>-web-<env>` shows it. The watch resumes the failed lane up to three times |
 | KV lane: title already exists (10014) | `adopt.tf` imports a namespace of the same title; restore it if removed. Two products with one `reponame` in one account share titles — pick another `reponame` |
 | web lane fails resolving `WIRING_CLOUDFLARE_KV_<ENV>` | that environment's KV apply failed — read its lane; the web lane waits on it |
 | `wiring` await stops: `WIRING_CLOUDFLARE_KV` missing on stage or prod | the convergence was green but the apply published nothing: the KV component lost its `secretOutputs`, or its lane was not in the plan. Re-run the phase; its retouch marker re-plans the KV root |

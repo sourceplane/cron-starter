@@ -61,9 +61,10 @@ spec:
     workerEntrypoint: worker.ts
     assetsDir: .open-next/assets
 
-    # Per-env worker name: cron-starter-web-{dev,stage,prod}. The seven Cron
-    # Triggers in wrangler.jsonc are registered on each deployed Worker, so
-    # stage and prod each write their own namespace on schedule.
+    # Per-env worker name: cron-starter-web-{dev,stage,prod}. The one Cron
+    # Trigger in wrangler.jsonc (every minute; the seven schedules are
+    # dispatched from it) is registered on each deployed Worker, so stage and
+    # prod each write their own namespace on schedule.
     workerName: cron-starter-web
     environmentAwareWorkerName: true
 
@@ -78,10 +79,10 @@ spec:
     # root applies to and which only verifies, renders from the committed
     # fixture. The committed wrangler.jsonc (the fixture render) is what the
     # composition's verify-app-structure step finds before this runs; the
-    # render keeps its `main` (worker.ts) and its `triggers.crons`.
+    # render keeps its `main` (worker.ts) and its one `triggers.crons` entry.
     buildCommand: node ../../tooling/wire/live.mjs --template wrangler.template.jsonc --out wrangler.jsonc --components cloudflare-kv --env "${ORUN_ENVIRONMENT}" --fixture wiring.fixture.json --fixture-envs dev && pnpm exec turbo run build --filter=@app/web
 
-    # Smoke: the CRON's effect is readable. The every-minute trigger runs
+    # Smoke: the CRON's effect is readable. Every minute the trigger runs
     # /api/cron/1m through the scheduled handler, which records `fetchedAt`
     # under `1m` in the KV namespace; /api/data/1m — answered only by the
     # Worker, reading that namespace — must carry a run time no older than ten

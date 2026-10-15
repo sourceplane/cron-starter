@@ -5,9 +5,9 @@ metadata:
   description: >-
     The cron-starter as a Blueprint of itself — instantiate a new
     scheduled-jobs repository (Next.js on Cloudflare Workers + Static Assets,
-    seven Cron Triggers on the same Worker recording their runs in a Workers
-    KV namespace Terraform provisions per environment, and the page that shows
-    them) and take it from nothing to live on stage and prod: ONE landing that
+    one Cron Trigger on the same Worker dispatching seven schedules that record
+    their runs in a Workers KV namespace Terraform provisions per environment,
+    and the page that shows them) and take it from nothing to live on stage and prod: ONE landing that
     places, brands and merges the whole product, one convergence that applies
     the namespace before the Worker that binds it, then a hook-only phase that
     records what went live. Run one at a time with
@@ -322,7 +322,7 @@ hooks:
           Everything the cron-starter baseline builds for
           {{ .inputs.productname }} in {{ .inputs.githuborg }}/{{ .inputs.reponame }}:
           the repository, its CI, its KV namespaces and the Worker with its
-          Cron Triggers live on stage and prod in one landing, then the record
+          Cron Trigger live on stage and prod in one landing, then the record
           of what went live. One
           milestone per phase, in the order the phases run; one task per
           landing, each bound to the pull request that lands it.
@@ -336,7 +336,7 @@ hooks:
         exitCriteria:
           - repository created under {{ .inputs.githuborg }}, linked to the workspace, the product merged as one pull request
           - the KV namespaces applied and their wiring published on stage and prod
-          - the Worker built and deployed on stage and prod, its Cron Triggers recording runs the page reads
+          - the Worker built and deployed on stage and prod, its Cron Trigger recording runs the page reads
     - id: m02
       uses: orun.task/ensure@v1
       with:
@@ -356,7 +356,7 @@ hooks:
         brief: >-
           Create {{ .inputs.githuborg }}/{{ .inputs.reponame }} and land the
           whole product as its first pull request — intent, CI, tooling, the
-          KV root, the Worker with its page, API routes and Cron Triggers, and
+          KV root, the Worker with its page, API routes and Cron Trigger, and
           its tests, branded as {{ .inputs.productname }} — then see one
           convergence apply the namespaces and deploy the Worker to stage and
           prod, smoke-tested over HTTP on a run its every-minute trigger
@@ -398,16 +398,16 @@ hooks:
 phases:
   - name: 01-product
     title: The product, built in one landing
-    description: The whole tree — manifests, CI, tooling, the KV root, the Worker with its page, API routes and Cron Triggers, and its tests — branded, landed as one pull request, and deployed by one convergence.
+    description: The whole tree — manifests, CI, tooling, the KV root, the Worker with its page, API routes and Cron Trigger, and its tests — branded, landed as one pull request, and deployed by one convergence.
     # An estimate until a bootstrap measures it: the pull request's Checks (a
     # full Next.js build), the merge, the KV apply, then the Worker's build,
     # deploy and smoke on stage and prod side by side — the smoke waiting up
     # to a minute or two for the every-minute trigger's first run.
     expectedMinutes: 13
     narrate:
-      start:  "Creating the repository and landing the whole product in one pull request — intent, CI, tooling, the KV namespace and the Worker with its page, routes, Cron Triggers and tests. Then one convergence applies the namespace and deploys the Worker on stage and prod. Usually about {{ .meta.expectedMinutes }} minutes."
+      start:  "Creating the repository and landing the whole product in one pull request — intent, CI, tooling, the KV namespace and the Worker with its page, routes, Cron Trigger and tests. Then one convergence applies the namespace and deploys the Worker on stage and prod. Usually about {{ .meta.expectedMinutes }} minutes."
       await:  "One convergence is deploying the product: the KV namespace first, then the Worker built with its id, on stage and prod side by side, each smoke waiting for the every-minute trigger to record a run. The Next.js build is the long pole; nothing is stuck."
-      done:   "{{ .inputs.reponame }} is live on stage and prod — {{ .meta.files }} files on main, branded as {{ .inputs.productname }}, its Cron Triggers recording runs. That took {{ .meta.elapsed }}."
+      done:   "{{ .inputs.reponame }} is live on stage and prod — {{ .meta.files }} files on main, branded as {{ .inputs.productname }}, its Cron Trigger recording runs. That took {{ .meta.elapsed }}."
       failed: "The product did not come up. The failing lane above names the component — the KV apply, or the Worker's build, deploy or smoke — and a provider error is in its log; whatever deployed is still there."
     modules: [ai-deployment, ai-operations, cloudflare-kv, discovery-roots, github-workflows, rebrand-values, root-gitignore, root-intent, root-kiox, root-kiox-lock, root-package-json, root-pnpm-lock, root-pnpm-workspace, root-readme, root-turbo, tooling-eslint, tooling-tsconfig, tooling-wire, vscode, web, web-tests]
     # THE PLATFORM MUST BE ABLE TO SEE THE REPOSITORY BEFORE IT EXISTS. Every

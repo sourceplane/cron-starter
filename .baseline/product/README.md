@@ -25,7 +25,7 @@ and how to operate it is in
 | The page (the seven schedules and their last runs) | `apps/web/pages/index.tsx`, `components/post.tsx` |
 | The site's name and source link | `apps/web/lib/site.ts` |
 | What a schedule runs, and how its record is read | `apps/web/pages/api/cron/[cron].ts`, `pages/api/data/[interval].ts` |
-| The Cron Triggers and the scheduled handler | `triggers.crons` in `apps/web/wrangler.template.jsonc`, `lib/crons.ts`, `lib/scheduled.ts`, `worker.ts` |
+| The Cron Trigger and the scheduled handler | the one `triggers.crons` entry in `apps/web/wrangler.template.jsonc`, the seven schedules in `lib/crons.ts`, `lib/scheduled.ts`, `worker.ts` |
 | The store (Workers KV, `kv.set` / `kv.get`) | `apps/web/lib/kv.ts` |
 | Workers build, bindings and deploy contract | `apps/web/next.config.mjs`, `open-next.config.ts`, `wrangler.template.jsonc` + `wiring.fixture.json` (→ `wrangler.jsonc`), `component.yaml` |
 | The KV namespace (stage, prod) | `infra/terraform/cloudflare-kv` |
@@ -45,8 +45,9 @@ pnpm build              # next build + opennextjs-cloudflare build → apps/web/
 ```bash
 pnpm --filter @app/web dev    # http://localhost:3000 — a local KV through wrangler's platform proxy, no scheduler
 cd apps/web && pnpm exec wrangler dev --test-scheduled         # the built Worker on :8787, triggers fired by hand
-curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"        # runs the every-minute schedule
-curl http://localhost:8787/api/data/1m                          # …and reads what it recorded
+curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"        # fires the trigger now: 1m, and whatever else is due
+curl "http://localhost:8787/cdn-cgi/local/scheduled?cron=*+*+*+*+*&time=1793491200000"   # as at Sunday 2026-11-01 00:00 UTC: all seven
+curl http://localhost:8787/api/data/1m                          # …and reads what a run recorded
 ```
 
 Make the page yours in `apps/web/pages/index.tsx`, and its name and the
@@ -54,22 +55,26 @@ repository it links to in `apps/web/lib/site.ts`.
 
 ## How the schedules run
 
-`wrangler.template.jsonc` registers seven Cron Triggers on the Worker.
-`worker.ts` is the Worker's entry: the fetch handler OpenNext generates, plus
-a `scheduled` handler. When a trigger fires, the handler looks its expression
-up in `lib/crons.ts` and requests `/api/cron/<interval>` through that same
-fetch handler — the route a scheduler would call over HTTPS — which writes
-`{ fetchedAt, id }` under the interval's key. The page polls
+`wrangler.template.jsonc` registers ONE Cron Trigger on the Worker, every
+minute. `worker.ts` is the Worker's entry: the fetch handler OpenNext
+generates, plus a `scheduled` handler. Each time the trigger fires, the
+handler checks the seven schedules in `lib/crons.ts` against the minute the
+trigger was scheduled for (UTC) and, for every one that is due, requests
+`/api/cron/<interval>` through that same fetch handler — the route a
+scheduler would call over HTTPS — which writes `{ fetchedAt, id }` under the
+interval's key. `1m` runs every minute, `10m` when the minute is a multiple
+of ten, `1h` on the hour, `12h` at 00:00 and 12:00, `1d` at midnight, `1w` at
+midnight on Sunday and `1mo` at midnight on the 1st. The page polls
 `/api/data/<interval>` for each schedule and shows "fetched N ago".
-`lib/crons.ts` and `triggers.crons` must list the same expressions; a test
-holds them equal.
 
-The account needs **Workers Paid**: Cloudflare allows five Cron Triggers per
-account on the Free plan, and this site registers seven on each of stage and
-prod. A new or changed trigger can take a few minutes to start firing after
-a deploy. `/api/cron/<interval>` is public, as in the template it comes
-from: anyone can run a schedule early. Guarding it is a Worker secret the
-scheduled handler sends as a header and the route checks.
+To change a schedule, change its expression in `lib/crons.ts` (and the one
+the page shows beside it in `pages/index.tsx`); the trigger stays as it is.
+One trigger per Worker, two for stage and prod, stays inside the five Cron
+Triggers per account that Cloudflare's Workers Free plan allows. The trigger
+can take a few minutes to start firing after the first deploy.
+`/api/cron/<interval>` is public, as in the template it comes from: anyone
+can run a schedule early. Guarding it is a Worker secret the scheduled
+handler sends as a header and the route checks.
 
 ## How the namespace is wired
 

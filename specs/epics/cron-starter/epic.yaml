@@ -8,7 +8,7 @@ metadata:
   key: CR
 spec:
   title: "Vercel's Cron Jobs example on Cloudflare Workers with Cron Triggers and Workers KV"
-  summary: "Vercel's Cron Jobs example — seven cron schedules, each requesting /api/cron/<interval> to record the newest Hacker News story and the run time in Vercel KV, and a page that polls /api/data/<interval> for them — runs on Cloudflare Workers + Static Assets through @opennextjs/cloudflare. The seven schedules are Cron Triggers on the same Worker: a custom worker entry re-exports the generated fetch handler and adds a scheduled handler that turns the expression that fired back into the request Vercel used to make, so the template's own route runs on schedule. The timestamps live in a Workers KV namespace provisioned by Terraform through Orun and bound through the Cirrus baseline's wiring documents."
+  summary: "Vercel's Cron Jobs example — seven cron schedules, each requesting /api/cron/<interval> to record the newest Hacker News story and the run time in Vercel KV, and a page that polls /api/data/<interval> for them — runs on Cloudflare Workers + Static Assets through @opennextjs/cloudflare. The seven schedules run on the same Worker: a custom worker entry re-exports the generated fetch handler and adds a scheduled handler that turns each schedule due at a Cron Trigger's scheduled time back into the request Vercel used to make, so the template's own route runs on schedule — since CR4 from one every-minute trigger per Worker, which keeps a product inside Workers Free's Cron Trigger limit. The timestamps live in a Workers KV namespace provisioned by Terraform through Orun and bound through the Cirrus baseline's wiring documents."
   state: completed
   milestones:
     - name: "CR0 — the spec"
@@ -36,7 +36,8 @@ spec:
       exitCriteria:
         - "blueprint.yaml (the console card) and repo-blueprint.yaml (the build) take a new product from nothing to live on stage and prod in ONE landing (01-product) and a hook-only record (02-docs)"
         - "the product's own push-to-main plan applies cloudflare-kv before it deploys web, and the landing's await finds WIRING_CLOUDFLARE_KV on stage and prod"
-        - "the deploy's smoke reads a run the every-minute Cron Trigger recorded; the end-to-end tier fires the scheduled handler in the built Worker and reads its record back"
+        - "the Worker registers ONE Cron Trigger (every minute) and dispatches the seven schedules from its scheduled time, so a product fits the Workers Free plan"
+        - "the deploy's smoke reads a run the trigger recorded; the end-to-end tier fires the scheduled handler in the built Worker at times that make each schedule due and reads every record back"
         - "a product built from it carries the product only, renamed throughout to its own name, repository, Worker and namespace titles"
         - "Baseline CI is green: contract tests, the blueprint read by the pinned orun, the leak gate, the offline bootstrap and the end-to-end tier"
       tasks: [CR-5]

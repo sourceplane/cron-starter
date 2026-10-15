@@ -33,14 +33,13 @@ orun new --blueprint repo-blueprint.yaml --out ~/sites/acme-crons --run-hooks --
 Or, once the platform's registry lists it, from the Orun console (Baselines →
 `cron-starter` → Build). Two phases: **`01-product`** creates the
 repository and lands the whole product as ONE pull request — intent, CI,
-tooling, the KV root, the Worker with its page, routes and Cron Triggers,
+tooling, the KV root, the Worker with its page, routes and Cron Trigger,
 and its tests — and one convergence applies the KV namespace on stage and
 prod and then deploys the Worker with its id, smoke-tested on a run its
 every-minute trigger recorded; **`02-docs`** records the live deployment
 from probed facts. **[BOOTSTRAP.md](BOOTSTRAP.md)** is the operator guide;
-[docs/phases/](docs/phases/README.md) has a page per phase. The Cloudflare
-account needs **Workers Paid**: the product registers fourteen Cron
-Triggers, and Workers Free allows five per account.
+[docs/phases/](docs/phases/README.md) has a page per phase. The Workers
+Free plan is enough: the product registers one Cron Trigger per Worker.
 
 The new repository receives the **product only** — the app, its KV root, its
 tests, its CI, its tooling, a README of its own and its operating contract —
@@ -68,19 +67,23 @@ namespace titles. None of this repository's machinery ships.
 | The cron route (records `{ fetchedAt, id }` under the interval) | `apps/web/pages/api/cron/[cron].ts` |
 | The data route (reads the record, fetches the story) | `apps/web/pages/api/data/[interval].ts` |
 | `@vercel/kv`'s `set`/`get` over the `KV` binding | `apps/web/lib/kv.ts` |
-| The Worker entry: OpenNext's `fetch` + the `scheduled` handler | `apps/web/worker.ts`, `apps/web/lib/scheduled.ts`, `apps/web/lib/crons.ts` |
-| Workers build, triggers, bindings and deploy contract | `apps/web/next.config.mjs`, `open-next.config.ts`, `wrangler.template.jsonc` + `wiring.fixture.json` (→ the committed `wrangler.jsonc`), `component.yaml` |
+| The Worker entry: OpenNext's `fetch` + the `scheduled` handler that dispatches the schedules | `apps/web/worker.ts`, `apps/web/lib/scheduled.ts`, `apps/web/lib/crons.ts` |
+| Workers build, trigger, bindings and deploy contract | `apps/web/next.config.mjs`, `open-next.config.ts`, `wrangler.template.jsonc` + `wiring.fixture.json` (→ the committed `wrangler.jsonc`), `component.yaml` |
 | The KV namespace (stage, prod) | `infra/terraform/cloudflare-kv` |
 | The wrangler renderer | `tooling/wire` |
 | Tests | `tests/web` (vitest) |
 
 ## The schedules
 
-The seven schedules are `vercel.json`'s, verbatim, now `triggers.crons` in
-`apps/web/wrangler.template.jsonc`. Cron Triggers take the same five-field
-expressions, in UTC.
+The seven schedules are `vercel.json`'s, verbatim, now in
+`apps/web/lib/crons.ts`. The Worker registers ONE Cron Trigger, every minute
+(`triggers.crons` in `apps/web/wrangler.template.jsonc`), and the scheduled
+handler runs every schedule whose five-field expression, in UTC, matches the
+minute the trigger was scheduled for. One trigger per Worker — two for stage
+and prod — fits the Workers Free plan's five per account; seven per Worker
+would not.
 
-| Interval | Expression | Fires | Route the trigger runs |
+| Interval | Expression | Due | Route the handler runs |
 |---|---|---|---|
 | `1m` | `* * * * *` | every minute | `GET /api/cron/1m` |
 | `10m` | `*/10 * * * *` | every ten minutes | `GET /api/cron/10m` |
@@ -90,10 +93,11 @@ expressions, in UTC.
 | `1w` | `0 0 * * 0` | Sundays at 00:00 | `GET /api/cron/1w` |
 | `1mo` | `0 0 1 * *` | the 1st at 00:00 | `GET /api/cron/1mo` |
 
-A trigger hands the Worker only the expression that fired; `lib/crons.ts`
-turns it back into the interval, and `lib/scheduled.ts` requests
-`/api/cron/<interval>` through the OpenNext fetch handler in-process — so
-the template's own route is what runs on schedule, as it did on Vercel.
+The trigger hands the Worker its expression and the minute it was
+scheduled for; `lib/crons.ts` says which schedules are due then, and
+`lib/scheduled.ts` requests `/api/cron/<interval>` for each through the
+OpenNext fetch handler in-process — so the template's own route is what runs
+on schedule, as it did on Vercel.
 
 ## Getting started
 
@@ -128,7 +132,7 @@ curl http://127.0.0.1:8808/api/data/1m                      # {"fetchedAt":…,"
 The Worker's log shows `/api/cron/1m 200 "OK"` for each run; a route that
 answers non-2xx makes the invocation throw, which is how a failed run shows
 in the Workers dashboard once deployed. There, Workers → the Worker →
-Triggers lists the seven Cron Triggers and their next runs; the page's
+Triggers lists the one Cron Trigger and its next run; the page's
 "fetched N ago" is the same thing from the outside.
 
 ## How it maps to Vercel
@@ -136,12 +140,12 @@ Triggers lists the seven Cron Triggers and their next runs; the page's
 | Vercel | Here |
 |---|---|
 | Next.js hosting | One Cloudflare Worker (`worker.ts` wrapping `.open-next/worker.js`) + Static Assets |
-| Vercel Cron: `vercel.json` `crons[]` requesting `/api/cron/<interval>` | Cron Triggers: `triggers.crons` on the same Worker; the `scheduled` handler requests the same path through the OpenNext fetch handler |
+| Vercel Cron: `vercel.json` `crons[]` requesting `/api/cron/<interval>` | One every-minute Cron Trigger on the same Worker; the `scheduled` handler requests the same path, for each schedule due that minute, through the OpenNext fetch handler |
 | Vercel KV `kv.set` / `kv.get` | Workers KV `KV` binding behind `lib/kv.ts` with the same surface (JSON values) |
 | `KV_URL`, `KV_REST_API_*` | No env var: the namespace id is rendered into `wrangler.jsonc` per environment from the Terraform root's wiring document |
 | `@vercel/analytics` | Cloudflare Web Analytics beacon (`components/analytics.tsx`), rendered when `NEXT_PUBLIC_CF_BEACON_TOKEN` is set at build |
 | A KV store created in the dashboard | `infra/terraform/cloudflare-kv`, applied by Orun before the Worker deploys |
-| Deploy on push | Orun applies the namespace and deploys `<repo>-web-{stage,prod}` on merge to `main` (`apps/web/component.yaml`); each carries its own seven triggers and writes its own namespace |
+| Deploy on push | Orun applies the namespace and deploys `<repo>-web-{stage,prod}` on merge to `main` (`apps/web/component.yaml`); each carries its own trigger and writes its own namespace |
 | "Deploy with Vercel" (clone the template) | `orun new --blueprint repo-blueprint.yaml` — a new repository, branded, deployed |
 
 The cron route is public over HTTP, as upstream (no `CRON_SECRET`); the
@@ -158,7 +162,7 @@ infra/terraform/cloudflare-kv ──apply──► orun secret WIRING_CLOUDFLARE
 apps/web  dependsOn cloudflare-kv (enforced on main) · secretEnv WIRING_CLOUDFLARE_KV_<ENV>
   build:  tooling/wire/live.mjs → wrangler.jsonc with the environment's namespace id
           (dev, verify-only, renders the fixture) → next build → opennextjs-cloudflare
-  deploy: worker.ts (fetch + scheduled) and its seven triggers.crons
+  deploy: worker.ts (fetch + scheduled) and its one trigger, * * * * *
   smoke:  /api/data/1m carries a fetchedAt the every-minute trigger recorded
 ```
 
@@ -166,16 +170,14 @@ apps/web  dependsOn cloudflare-kv (enforced on main) · secretEnv WIRING_CLOUDFL
 `wrangler.template.jsonc`, because the deploy lane's `verify-app-structure`
 step checks the config exists before it builds; Checks fails if the two
 disagree. The render keeps the template's `main` (`worker.ts`) and its
-`triggers.crons`, so the scheduled handler and its schedules survive every
-lane's build. Cloudflare caps Cron Triggers per account by plan (5 on
-Workers Free, 250 on Workers Paid); seven per environment is the template's
-count, so stage + prod need the Paid plan.
+`triggers.crons`, so the scheduled handler and its trigger survive every
+lane's build; the schedules live in `lib/crons.ts`, inside the bundle.
 
 ## CI
 
 | Workflow | What it runs | Ships to a product |
 |---|---|---|
 | `checks.yml` | install, wire fixtures (and the committed config is their render), typecheck, lint, test, build — every PR (not pushes: on main, `ci.yml` must be the only run a commit has, because the bootstrap's convergence watch takes the newest one) | yes |
-| `ci.yml` | the Orun pipeline: `orun plan --changed`, then one job per lane; applies the KV namespace, then deploys stage → prod on merge — the triggers register with the Worker and start firing within minutes. It plans nothing while `intent.yaml` names the placeholder workspace `ws_CHANGE_ME`, as this repository does | yes |
+| `ci.yml` | the Orun pipeline: `orun plan --changed`, then one job per lane; applies the KV namespace, then deploys stage → prod on merge — the trigger registers with the Worker and starts firing within minutes. It plans nothing while `intent.yaml` names the placeholder workspace `ws_CHANGE_ME`, as this repository does | yes |
 | `baseline.yml` | the baseline's own tiers: contract tests, the wiring path, the blueprint read by the pinned orun, the leak gate, the offline bootstrap with the product's own plan, the product built in the job tree, dry-deployed, served, and its scheduled handler fired | no |
 | `tag.yml` | cuts a `baseline-vN` tag (manual) | no |

@@ -19,19 +19,13 @@
     "binding": "ASSETS"
   },
   "observability": { "enabled": true },
-  // The seven schedules vercel.json declared, verbatim. Each fires the
-  // scheduled handler with its expression; lib/crons.ts maps the expression
-  // back to the interval whose route Vercel called (/api/cron/<interval>).
+  // ONE Cron Trigger, every minute. The seven schedules vercel.json declared
+  // are dispatched from it: lib/crons.ts holds them, and the scheduled handler
+  // runs the route (/api/cron/<interval>) of every schedule whose expression
+  // matches the minute the trigger was scheduled for. One trigger per Worker —
+  // two for stage and prod — fits Workers Free's five per account.
   "triggers": {
-    "crons": [
-      "* * * * *",
-      "*/10 * * * *",
-      "0 * * * *",
-      "0 */12 * * *",
-      "0 0 * * *",
-      "0 0 * * 0",
-      "0 0 1 * *"
-    ]
+    "crons": ["* * * * *"]
   },
   // The last-run store — Workers KV in place of Vercel KV.
   "kv_namespaces": [

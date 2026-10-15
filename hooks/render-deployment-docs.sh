@@ -126,7 +126,7 @@ cat > ai/context/deployment.md <<EOF
 | Orun workspace | \`${ws}\` (slug \`${slug}\`) |
 | declared in | \`intent.yaml\` → \`execution.state.workspace\` |
 | Workers | \`${brand}-web-stage\`, \`${brand}-web-prod\` on \`${sub}.workers.dev\` |
-| Cron Triggers | seven per Worker (\`triggers.crons\` in \`apps/web/wrangler.template.jsonc\`), every minute to monthly |
+| Cron Trigger | one per Worker, every minute (\`apps/web/wrangler.template.jsonc\`); it dispatches the seven schedules in \`apps/web/lib/crons.ts\`, every minute to monthly |
 | KV namespaces | \`stg-${repo}-app-kv-stage\`, \`prod-${repo}-app-kv-prod\` (\`infra/terraform/cloudflare-kv\`); their ids reach the Workers as \`WIRING_CLOUDFLARE_KV\` on each environment |
 | CI lane CLI pin | orun \`${lanepin}\` (\`.github/workflows/ci.yml\`) |
 
@@ -161,7 +161,7 @@ ${integrations}
 
 Merges to \`main\` converge automatically: CI plans the changed components and
 runs each lane with \`orun run --remote-state\` against the workspace above —
-the KV namespace first, then the Worker and its triggers. See [operations.md](operations.md) for
+the KV namespace first, then the Worker and its trigger. See [operations.md](operations.md) for
 the full operating contract.
 EOF
 echo "render-docs: wrote ai/context/deployment.md"
