@@ -112,4 +112,5 @@ build on every push and pull request. `ci.yml` is the Orun pipeline: set
 KV root, renders the Worker's config with the real namespace id, and deploys
 to `stage`, then `prod` — the triggers register with the Worker and start
 firing on the next minute. Cloudflare caps Cron Triggers per account by
-plan; seven per environment is the template's count.
+plan (5 on Workers Free, 250 on Workers Paid); seven per environment is the
+template's count, so stage + prod need the Paid plan.

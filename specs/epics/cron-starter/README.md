@@ -8,7 +8,7 @@ The port keeps the template's pages, API routes, component, styles and `@vercel/
 
 | Field | Value |
 |-------|-------|
-| Status | Draft |
+| Status | ✅ Shipped — CR0–CR3 landed (#1–#4); KV apply and live deploy gated on a linked workspace |
 | Cluster | **CR** (CR0–CR3) |
 | Owner(s) | `apps/web` (the page, the routes, the worker entry) · `tests/web` · `infra/terraform/cloudflare-kv` |
 | Builds on | `cirrus-baseline` conventions: the `cloudflare-kv` root and the `@@wiring(...)@@` deploy-time render; `kv-redis-starter`'s shape for a KV-bound Next app |
@@ -16,7 +16,7 @@ The port keeps the template's pages, API routes, component, styles and `@vercel/
 | Changes | What runs the routes on schedule (Vercel Cron → Cron Triggers through a custom worker entry), where they write (Vercel KV → Workers KV behind `lib/kv.ts`), analytics (beacon), the Workers build, tests, the KV root and the deploy contract; page copy says Cron Triggers and Workers KV |
 | Decisions locked | (1) One Worker: the triggers sit on the Next Worker and the scheduled handler calls the OpenNext fetch handler in-process with a synthetic request — not a second Worker calling the routes over HTTP. (2) The routes stay as written: `lib/kv.ts` mirrors `kv.set`/`kv.get` (JSON values, `"OK"` from `set`). (3) `wrangler.jsonc` is rendered per environment from the wiring document; never committed. (4) The seven schedules are the template's, verbatim, in `triggers.crons` and in `lib/crons.ts`; a test holds the two together. |
 | Gate | CR1 is the first user-visible rung. CR2 applies only with a linked workspace; it is verified by `terraform validate`. |
-| Shipped as | |
+| Shipped as | `main` after [#4](https://github.com/sourceplane/cron-starter/pull/4); verified locally under `wrangler dev --test-scheduled` with a local namespace |
 
 ## Read order
 

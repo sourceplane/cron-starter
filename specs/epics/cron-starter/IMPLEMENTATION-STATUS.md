@@ -5,10 +5,10 @@ the code departed from `design.md` or from the upstream template.
 
 | Milestone | State | PR |
 |---|---|---|
-| CR0 — the spec | | |
-| CR1 — the crons on Workers | | |
-| CR2 — the KV namespace from Terraform | | |
-| CR3 — ready to instantiate | | |
+| CR0 — the spec | ✅ Shipped | [#1](https://github.com/sourceplane/cron-starter/pull/1) |
+| CR1 — the crons on Workers | ✅ Shipped | [#2](https://github.com/sourceplane/cron-starter/pull/2) |
+| CR2 — the KV namespace from Terraform | ✅ Shipped (validated; apply gated on a linked workspace) | [#3](https://github.com/sourceplane/cron-starter/pull/3) |
+| CR3 — ready to instantiate | ✅ Shipped | [#4](https://github.com/sourceplane/cron-starter/pull/4) |
 
 ## Departures from the upstream template
 
@@ -95,3 +95,43 @@ Next `^16.0.10` → `16.3.8`; React 19; Tailwind `^3.2.7` (resolves 3.4);
 and fixture. Upstream's `turbo.json`, `pnpm-lock.yaml`, `vercel.json`,
 `.gitignore` and `.env.example` are not carried; `apps/web/README.md` is
 upstream's, verbatim.
+
+## Verified
+
+- Local: `pnpm run wire:fixture`, `pnpm typecheck`, `pnpm lint` (0 errors,
+  1 upstream warning), `pnpm test` (16 tests: the cron table equals the
+  template's `triggers.crons`; the scheduled handler for all seven
+  expressions, an unknown one and a non-2xx; `lib/kv.ts` over a mocked
+  namespace; both routes with mocked KV and a mocked Hacker News),
+  `pnpm build` (`/` static, `/api/cron/[cron]` and `/api/data/[interval]`
+  dynamic, Worker + assets, `populateCache local`) green; `tsc` stays green
+  after the build (the generated bundle is excluded).
+- `wrangler dev --port 8808 --config wrangler.jsonc --test-scheduled` over
+  the built Worker with a local namespace: `/` 200 ("Cron Triggers on
+  Cloudflare", no beacon without a token); `/api/data/1m` → `{}` before any
+  run; `GET /__scheduled?cron=*+*+*+*+*` → "Ran scheduled event" with the
+  Worker logging `/api/cron/1m 200 "OK"`; `/api/data/1m` then →
+  `{"fetchedAt":…,"id":…,"title":…}`; `0 0 1 * *` → `1mo` likewise; an
+  unknown expression → a warning and no call; `/api/cron/10m` by hand →
+  `"OK"`; `/nope` 404; `/thumbnail.png` and `/favicon.ico` 200.
+- `wrangler deploy --dry-run` on the rendered config bundles `worker.ts`
+  (4.5 MiB, the seven triggers and the `KV`/`ASSETS` bindings accepted).
+- `terraform init -backend=false && terraform validate` green on
+  `infra/terraform/cloudflare-kv`.
+- CI: `Checks` green on #1, #2, #3 and #4.
+- Not verified: the KV apply and a live deploy — both need the product
+  linked to an Orun workspace with a Cloudflare connection (`ORUN_CI`) —
+  and a trigger firing on the wall clock, which only a deployed Worker does
+  (the account needs Workers Paid for fourteen triggers across stage and
+  prod; Free allows five).
+
+## Versions
+
+| Package | Version | Why |
+|---|---|---|
+| next | 16.3.8 | newest inside `@opennextjs/cloudflare` 1.20.11's peer range (16.4.x fails at boot on the adapter) |
+| @opennextjs/cloudflare | ^1.20.11 | `getCloudflareContext` for the binding; the generated fetch handler the custom entry wraps; static-assets cache + `populateCache local` |
+| wrangler | ^4.151.0 | `triggers.crons`, `--test-scheduled`, compatibility_date 2026-10-01 |
+| @vercel/examples-ui | ^1.0.5 | upstream's pin; React 19 pairing as upstream's lockfile |
+| swr, ms | ^2.1.0, ^2.1.3 | upstream's pins |
+| eslint-config-next | 16.3.8 | flat config for Next 16 (upstream: eslint 8 + `canary`) |

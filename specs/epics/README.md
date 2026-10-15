@@ -7,6 +7,6 @@ folder is the adoption; the merge creates the epic in the workspace.
 
 | Epic | Cluster | Status | What it is |
 |------|---------|--------|------------|
-| [`cron-starter/`](./cron-starter/) | **CR** | Draft | Vercel's Cron Jobs example, equivalent in code and function, on Cloudflare Workers with Cron Triggers driving the same API routes and Workers KV holding the timestamps |
+| [`cron-starter/`](./cron-starter/) | **CR** | ✅ Shipped | Vercel's Cron Jobs example, equivalent in code and function, on Cloudflare Workers with Cron Triggers driving the same API routes and Workers KV holding the timestamps |
 
 As-built ≠ intent: what shipped lives in each epic's `IMPLEMENTATION-STATUS.md`.

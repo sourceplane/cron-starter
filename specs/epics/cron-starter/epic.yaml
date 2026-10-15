@@ -9,7 +9,7 @@ metadata:
 spec:
   title: "Vercel's Cron Jobs example on Cloudflare Workers with Cron Triggers and Workers KV"
   summary: "Vercel's Cron Jobs example — seven cron schedules, each requesting /api/cron/<interval> to record the newest Hacker News story and the run time in Vercel KV, and a page that polls /api/data/<interval> for them — runs on Cloudflare Workers + Static Assets through @opennextjs/cloudflare. The seven schedules are Cron Triggers on the same Worker: a custom worker entry re-exports the generated fetch handler and adds a scheduled handler that turns the expression that fired back into the request Vercel used to make, so the template's own route runs on schedule. The timestamps live in a Workers KV namespace provisioned by Terraform through Orun and bound through the Cirrus baseline's wiring documents."
-  state: backlog
+  state: completed
   milestones:
     - name: "CR0 — the spec"
       exitCriteria:
