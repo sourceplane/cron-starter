@@ -1,0 +1,10 @@
+{
+  "cloudflare-kv/stage": {
+    "app_kv_id": "00000000000000000000000000000001",
+    "app_kv_title": "stg-cron-starter-app-kv-stage"
+  },
+  "cloudflare-kv/prod": {
+    "app_kv_id": "00000000000000000000000000000003",
+    "app_kv_title": "prod-cron-starter-app-kv-prod"
+  }
+}

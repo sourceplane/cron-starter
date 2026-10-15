@@ -1,0 +1,40 @@
+// Rendered to wrangler.jsonc (git-ignored) by tooling/wire: the verify lane
+// renders from wiring.fixture.json, the deploy lane from the wiring document
+// the `cloudflare-kv` Terraform root lease-publishes (WIRING_CLOUDFLARE_KV_<ENV>).
+// The workers-assets composition deploys one environment per job with no
+// wrangler `--env`, so `__ENV__` names the environment this is rendered for.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cron-starter-web",
+  // The custom entry: the fetch handler @opennextjs/cloudflare generates plus
+  // the `scheduled` handler Cron Triggers call (see worker.ts).
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": { "enabled": true },
+  // The seven schedules vercel.json declared, verbatim. Each fires the
+  // scheduled handler with its expression; lib/crons.ts maps the expression
+  // back to the interval whose route Vercel called (/api/cron/<interval>).
+  "triggers": {
+    "crons": [
+      "* * * * *",
+      "*/10 * * * *",
+      "0 * * * *",
+      "0 */12 * * *",
+      "0 0 * * *",
+      "0 0 * * 0",
+      "0 0 1 * *"
+    ]
+  },
+  // The last-run store — Workers KV in place of Vercel KV.
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "@@wiring(cloudflare-kv/__ENV__:app_kv_id)@@"
+    }
+  ]
+}
