@@ -2,21 +2,21 @@
 
 Built by the turbo pipeline from `apps/web` and deployed with wrangler.
 
-| | |
-|---|---|
-| Worker config | `apps/web/wrangler.template.jsonc` |
-| Entry | `worker.ts` |
-| Compatibility date | `2026-10-01` |
+|                     |                                                 |
+| ------------------- | ----------------------------------------------- |
+| Worker config       | `apps/web/wrangler.template.jsonc`              |
+| Entry               | `worker.ts`                                     |
+| Compatibility date  | `2026-10-01`                                    |
 | Compatibility flags | `nodejs_compat`, `global_fetch_strictly_public` |
 
 ## Bindings
 
-| Binding | Kind | Source |
-|---|---|---|
-| `KV` | Workers KV namespace | `app_kv_id` from `cloudflare-kv` |
-| `ASSETS` | Static assets | `.open-next/assets` |
+| Binding  | Kind                 | Source                           |
+| -------- | -------------------- | -------------------------------- |
+| `KV`     | Workers KV namespace | `app_kv_id` from `cloudflare-kv` |
+| `ASSETS` | Static assets        | `.open-next/assets`              |
 
-Identifiers marked *from* a component are filled in at deploy time from
+Identifiers marked _from_ a component are filled in at deploy time from
 that component's published outputs for the environment being deployed.
 
 ## Scheduled triggers
