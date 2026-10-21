@@ -9,20 +9,28 @@ the code departed from `design.md` or from the upstream template.
 | CR1 — the crons on Workers | ✅ Shipped | [#2](https://github.com/sourceplane/cron-starter/pull/2) |
 | CR2 — the KV namespace from Terraform | ✅ Shipped (validated; apply gated on a linked workspace) | [#3](https://github.com/sourceplane/cron-starter/pull/3) |
 | CR3 — ready to instantiate | ✅ Shipped | [#4](https://github.com/sourceplane/cron-starter/pull/4) |
-| CR4 — a baseline, in one landing | ✅ Shipped (offline-proven; no live bootstrap yet, risk CR-K) | this PR (CR-5), to be tagged `baseline-v1` |
+| CR4 — a baseline, in one landing | ✅ Shipped (offline-proven; no live bootstrap yet, risk CR-K) | [#5](https://github.com/sourceplane/cron-starter/pull/5) (CR-5), tagged `baseline-v1` |
+| CR5 — the cirrus standard | ✅ Shipped | CR-6 — on `main` after `baseline-v1`, not yet tagged |
 
 ## Departures from the upstream template
 
 ### Vercel Cron → Cron Triggers through a custom worker entry
 
-`vercel.json` is gone. Its seven `crons` are `triggers.crons` in
-`wrangler.template.jsonc`, verbatim. `worker.ts` is wrangler's `main`: it
-imports the generated `.open-next/worker.js` (with `@ts-ignore`, as the
-OpenNext custom-worker howto does — the file exists only after the build),
-re-exports its `fetch`, and adds `scheduled` from `lib/scheduled.ts`, which
-maps the expression that fired to its interval (`lib/crons.ts`) and calls the
-fetch handler with a synthetic `GET https://cron.internal/api/cron/<interval>`.
-The component's `workerEntrypoint` is `worker.ts`, not `.open-next/worker.js`.
+`vercel.json` is gone. Its seven `crons` are the table in `lib/crons.ts`,
+verbatim, each with the interval whose route it called. The Worker registers
+ONE Cron Trigger, `* * * * *` (`TRIGGER`, the only entry in `triggers.crons`
+in `wrangler.template.jsonc`). `worker.ts` is wrangler's `main`: it imports
+the generated `.open-next/worker.js` (with `@ts-ignore`, as the OpenNext
+custom-worker howto does — the file exists only after the build), re-exports
+its `fetch`, and adds `scheduled` from `lib/scheduled.ts`, which runs every
+schedule whose expression matches the trigger's `scheduledTime` (UTC,
+`dueIntervals`), one after another, each as a synthetic
+`GET https://cron.internal/api/cron/<interval>` through the fetch handler, and
+fails the invocation naming any route that failed. The component's
+`workerEntrypoint` is `worker.ts`, not `.open-next/worker.js`. (Through CR3
+the seven expressions were seven `triggers.crons` entries and the handler
+mapped the one that fired to its interval, `intervalFor`; CR4 replaced both —
+"Departures from the port (CR4)" below, risks CR-B and CR-N.)
 
 ### `lib/kv.ts` replaces `@vercel/kv`
 
@@ -94,8 +102,8 @@ Next `^16.0.10` → `16.3.8`; React 19; Tailwind `^3.2.7` (resolves 3.4);
 `@types/node` `^20` → `^22`; `swr` `^2.1.0` (resolves 2.5). Package name
 `@app/web`, a per-app `turbo.json`, `component.yaml`, the wrangler template
 and fixture. Upstream's `turbo.json`, `pnpm-lock.yaml`, `vercel.json`,
-`.gitignore` and `.env.example` are not carried; `apps/web/README.md` is
-upstream's, verbatim.
+`.gitignore` and `.env.example` are not carried. `apps/web/README.md` was
+upstream's, verbatim, through CR3; CR4 replaced it with the app's own (below).
 
 ### The page's name and source link come from `lib/site.ts` (CR4)
 
@@ -150,6 +158,42 @@ every product.
 | the KV root's prose and names | Cirrus's "api-edge idempotency replay store", "this fork"; `idempotency_namespace_title`, `adopt_idempotency_namespace` | the cron runs' namespace; `app_kv_title`, `adopt_app_kv` | it ships into every product; no resource address changed |
 | `tooling/wire/render.mjs` | copied the template's header comment | writes a GENERATED banner | the committed render must say it is one |
 | `tasks/CR-1..4` | no `metadata` | `metadata.name` and `title` | `orun work check` (≥ v2.79) refused them |
+
+## The cirrus standard (CR5)
+
+Nothing about the app changed. What changed is the baseline around it:
+
+| What | Before | After | Why |
+|---|---|---|---|
+| orun pin | `kiox.yaml` (v2.15.0) + `kiox.lock`, shipped to every product | gone; orun is pinned where it runs, the `orun-action` `version:` in each workflow | nothing ran the kiox pin, and it disagreed with the lanes (v2.78.4) |
+| `root-kiox`, `root-kiox-lock` modules | in `01-product` | removed (`testing/phases.test.sh` and the rebrand's skip list follow) | a product is placed with 79 files (72 − 2 + 9): no kiox, plus the docs below |
+| component docs | none | `apps/web/docs/`, `infra/terraform/cloudflare-kv/docs/`, `tests/web/docs/` — `overview.md`, `architecture.md`, `runbook.md` | cirrus-baseline documents every component; the workspace Docs library renders `docs/` beside each `component.yaml` |
+| how the docs stay true | — | `tooling/catalog/gen-component-docs.py` derives them from the manifest, the Worker config (the one trigger included), Terraform, migrations and package scripts; Baseline CI runs it with `--check` | a hand-written copy of a manifest drifts silently |
+| context pack | `operations.md`, `deployment.md` | plus `current.md`, `decisions.md`, `open-risks.md` | cirrus-baseline's shape; the three new pages are this repository's own and no module places them (the leak gate still allows exactly two) |
+| status | CR4 "this PR, to be tagged"; the epic README's summary and "Vercel Cron → Cron Triggers" above still describing seven triggers and `intervalFor`; "Versions" calling `apps/web/README.md` upstream's | CR4 shipped ([#5](https://github.com/sourceplane/cron-starter/pull/5)) and tagged `baseline-v1`; one `* * * * *` trigger dispatching the seven schedules, as built; the README the app's | the documents had not caught up with the tag and with CR4 |
+
+## Verified (CR5)
+
+- `testing/{manifest,phases,coverage,rebrand,retouch,bootstrap-defer,wire}.test.sh`
+  green; `gen-component-docs.py --check` green (3 components, 9 pages).
+- `testing/leak.test.sh` at v2.58.11 (the blueprint job's pin): 79 files
+  derived (72 − 2 kiox + 9 docs pages); `ai/context` still exactly the two
+  declared pages; 72 shipped sources name no factory path, the generated
+  pages included.
+- `testing/placement.test.sh` at v2.78.4 (the lane pin, as `baseline.yml`
+  runs it — CR-L): 79 files placed, two landings, branded and re-tenanted,
+  the one `* * * * *` trigger kept; the product's own push-to-main plan
+  applies `cloudflare-kv` at level 0 and deploys `web` at level 1 on stage
+  and prod; on a pull request nothing waits; the 02-docs merge plans 0 jobs;
+  `--resume` a no-op.
+- The Checks sequence: `pnpm install --frozen-lockfile`, `wire:fixture` (no
+  diff), typecheck, lint (no warnings), test (5 files, 34 tests), build
+  green.
+- `testing/e2e.test.sh` at v2.78.4 green: the stage lane's four steps in the
+  staged job tree; under `wrangler dev --test-scheduled` the smoke refuses
+  the Worker before any trigger fired, the trigger at 8 crafted times runs
+  exactly the schedules due, all 7 records read back, and the smoke passes.
+- `orun task check CR-6` complete.
 
 ## Verified (CR4)
 
