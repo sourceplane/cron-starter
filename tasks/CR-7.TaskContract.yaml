@@ -1,0 +1,24 @@
+apiVersion: orun.io/v1
+kind: TaskContract
+metadata:
+  name: CR-7
+  title: "The subdomain from the Cloudflare connection"
+spec:
+  goal: The console card reads the workers.dev subdomain from the workspace's Cloudflare connection (from connection.cloudflare.workersSubdomain), as cirrus-baseline does since baseline-v23, so a console or `--from bst_…` build never asks for it and it always names the account the deploy tokens mint from; a hand-run build still passes it with --set
+  affects:
+    - blueprint.yaml
+    - repo-blueprint.yaml
+    - testing/manifest.test.sh
+    - BOOTSTRAP.md
+    - docs/phases/README.md
+    - ai/context/current.md
+    - ai/context/decisions.md
+    - specs/**
+    - tasks/**
+  doneWhen:
+    - "blueprint.yaml's subdomain input declares `from: connection.cloudflare.workersSubdomain`, and spec.requires.integrations lists cloudflare"
+    - testing/manifest.test.sh accepts that source only when the card requires the provider's integration, and fails naming the input when it does not (mutation-checked)
+    - BOOTSTRAP.md, docs/phases/README.md and repo-blueprint.yaml say a hand-run build still passes --set subdomain
+    - the contract tests, the docs check, the leak gate and the offline bootstrap are green
+  gates:
+    - checks
