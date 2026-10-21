@@ -82,6 +82,12 @@ itself changing.
   repository's own, so no module places them.
 - **Status that agrees with the tags.** CR4 is shipped and tagged; the epic
   README and the status file describe the one trigger CR4 built.
+- **The subdomain from the Cloudflare connection (CR-7).** The card's
+  `subdomain` input declares `from: connection.cloudflare.workersSubdomain`,
+  as cirrus-baseline since `baseline-v23`: the console fills it from the
+  connection the build is bound to and renders no field; `manifest.test.sh`
+  accepts the source only while the card requires `cloudflare`. A hand-run
+  build still passes `--set subdomain`.
 
 **Done when**
 - `git grep -i kiox` finds nothing outside this milestone's own record
