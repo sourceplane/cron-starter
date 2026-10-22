@@ -21,7 +21,7 @@ went live (`02-docs`).
 
 | | |
 |---|---|
-| Latest tag | `baseline-v2` (CR5 — the cirrus standard, [#6](https://github.com/sourceplane/cron-starter/pull/6) and [#7](https://github.com/sourceplane/cron-starter/pull/7): no kiox, generated component docs, this context pack, and the console card reading `subdomain` from the Cloudflare connection); `baseline-v1` is CR4 ([#5](https://github.com/sourceplane/cron-starter/pull/5)) |
+| Latest tag | `baseline-v3` (CR6 — the domain is set later, [#8](https://github.com/sourceplane/cron-starter/pull/8): the console asks for no domain, and a site is born with the placeholder `<reponame>.example.com` for an owner to replace); `baseline-v2` is CR5 (the cirrus standard, [#6](https://github.com/sourceplane/cron-starter/pull/6) and [#7](https://github.com/sourceplane/cron-starter/pull/7)), `baseline-v1` CR4 ([#5](https://github.com/sourceplane/cron-starter/pull/5)) |
 | Proven live | No. Everything short of the platform is proven offline in Baseline CI, the trigger fired by hand at crafted times; the token minted, a real KV apply, a real deploy registering its trigger and the trigger firing on Cloudflare's clock are still to come (risk CR-K) |
 
 ## Where to read
@@ -36,6 +36,6 @@ went live (`02-docs`).
 
 ## Next
 
-1. Bootstrap one product from `baseline-v2` against a workspace and record
+1. Bootstrap one product from `baseline-v3` against a workspace and record
    its timings, including how long the first trigger took to fire (closes
    CR-K).

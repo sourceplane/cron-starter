@@ -90,6 +90,14 @@ check "a fixture's namespace title follows the same rule" \
 check "the placeholder domain is the product's domain, not a renamed slug" \
   "$acme" intent.yaml '      BASE_DOMAIN: cron-starter.example.com' \
   '      BASE_DOMAIN: acme.dev'
+check "no domain given: the reserved placeholder, for an owner to replace later" \
+  '{"reponame":"acme-crons","productname":"Acme Crons","githuborg":"acme-inc","subdomain":"acme"}' \
+  intent.yaml '      BASE_DOMAIN: cron-starter.example.com' \
+  '      BASE_DOMAIN: acme-crons.example.com'
+check "an empty domain is no domain" \
+  '{"reponame":"acme-crons","productname":"Acme Crons","productdomain":""}' \
+  intent.yaml '      BASE_DOMAIN: cron-starter.example.com' \
+  '      BASE_DOMAIN: acme-crons.example.com'
 check "the repo slug" \
   "$acme" package.json '  "name": "cron-starter",' \
   '  "name": "acme-crons",'

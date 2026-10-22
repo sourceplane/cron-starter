@@ -135,7 +135,7 @@ orun integrations list --org <ws> --json && orun cloud check --org <ws>
 | redeploy without a change | edit the last line of `apps/web/component.yaml` (`# orun: redeploy <reason> <stamp>`) and merge — it is a deploy trigger, nothing reads it |
 | add a binding (R2, D1, another KV) | a Terraform root under `infra/terraform/` that publishes `WIRING_<ROOT>`, a token in `wrangler.template.jsonc`, its fixture entry, the root in the build's `--components`, the `WIRING_<ROOT>_<ENV>` secretEnv and an enforced `dependsOn` on it in `apps/web/component.yaml` |
 | forget a schedule's last run | `wrangler kv key delete <interval> --namespace-id <id> --remote` (the id is in the environment's `WIRING_CLOUDFLARE_KV`) |
-| serve a custom domain | attach it to the Worker in Cloudflare (README, "Custom domain"); nothing in the repository changes |
+| serve a custom domain | attach it to the Worker in Cloudflare (README, "Custom domain"), then replace the placeholder `cron-starter.example.com` in `intent.yaml`'s `BASE_DOMAIN` with it |
 | add a runtime secret | `orun secrets set <KEY> --org <ws> --env <env>` |
 | headless credentials | `ORUN_TOKEN` (workspace-scoped) + `GITHUB_TOKEN` |
 

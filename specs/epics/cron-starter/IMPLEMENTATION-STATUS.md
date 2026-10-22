@@ -11,6 +11,7 @@ the code departed from `design.md` or from the upstream template.
 | CR3 — ready to instantiate | ✅ Shipped | [#4](https://github.com/sourceplane/cron-starter/pull/4) |
 | CR4 — a baseline, in one landing | ✅ Shipped (offline-proven; no live bootstrap yet, risk CR-K) | [#5](https://github.com/sourceplane/cron-starter/pull/5) (CR-5), tagged `baseline-v1` |
 | CR5 — the cirrus standard | ✅ Shipped | [#6](https://github.com/sourceplane/cron-starter/pull/6) (CR-6), [#7](https://github.com/sourceplane/cron-starter/pull/7) (CR-7), tagged `baseline-v2` |
+| CR6 — the domain is set later | ✅ Shipped | [#8](https://github.com/sourceplane/cron-starter/pull/8) (CR-8), tagged `baseline-v3` |
 
 ## Departures from the upstream template
 
@@ -205,6 +206,48 @@ complete. Mutation check: with `cloudflare` removed from
 `spec.requires.integrations`, `manifest.test.sh` fails with the one finding
 `inputs[subdomain].from is 'connection.cloudflare.workersSubdomain' but
 spec.requires.integrations does not list cloudflare`; restored, it passes.
+
+## The domain is set later (CR6, CR-8)
+
+The console asked for the site's domain, with help text that said it did not
+need to exist — and nothing in the build needed one: the site answers on
+workers.dev from its first deploy, the page builds its absolute links (the
+Open Graph image included) from the request it is answering, the Cron
+Triggers depend on no hostname, and the one place the repository names the
+domain is `BASE_DOMAIN` in `intent.yaml`. A domain is an owner's step after
+the bootstrap (README, "Custom domain"), so the form no longer asks for it.
+
+- `blueprint.yaml` declares no `productdomain` input; the console's Product
+  step asks for the site's name alone.
+- `repo-blueprint.yaml`'s `productdomain` is optional, default empty. No hook,
+  probe or `when:` reads it — the only use is the `.rebrand/values.json`
+  template, which writes `""`. A hand-run build may still pass
+  `--set productdomain=` for a site that already has its domain.
+- `rebrand.mjs` no longer requires it. Empty, it brands the reserved
+  placeholder `<reponame>.example.com` (RFC 2606 — never someone else's
+  domain) where the domain goes — `BASE_DOMAIN` in dev, stage and prod — so
+  setting it later is replacing one string; the product README and
+  `ai/context/operations.md` say so.
+- `testing/fixtures/acme.json` carries no domain, so the leak gate, the
+  offline bootstrap and the e2e tier exercise exactly what a console build
+  supplies; `testing/rebrand.test.sh` pins the placeholder for an absent and
+  an empty domain; `baseline.yml`'s blueprint read sets no domain.
+
+Nothing that needs a domain was removed — it waits for one.
+
+Verified: `testing/{manifest,phases,coverage,rebrand,retouch,bootstrap-defer,wire}.test.sh`
+green (rebrand: 32 checks, the two new ones included); `gen-component-docs.py
+--check` green (3 components); `orun new --status` on `repo-blueprint.yaml`
+with no domain (01-product pending, 79 files) and `testing/leak.test.sh` (79
+files derived; 72 shipped sources name no factory path) at v2.58.11;
+`testing/placement.test.sh` at v2.78.4, as Baseline CI runs it (79 tracked
+files; the cron entry and its one trigger kept; cloudflare-kv → web on stage
+and prod; the 02-docs merge plans 0 jobs; `--resume` changes nothing). The
+offline bootstrap of the fixture, which names no domain, writes
+`"productdomain": ""` and brands `acme-cron-jobs.example.com` into the
+site's three `BASE_DOMAIN` lines, its README and its `operations.md` (5
+lines, 3 files), with no `cron-starter.example.com` left. `orun task check
+CR-8` complete.
 
 ## Verified (CR5)
 

@@ -115,6 +115,9 @@ The site answers on workers.dev from its first deploy. To serve it on your
 own domain, add the domain to the Cloudflare account the site deploys into
 and attach it to the Worker (dashboard → Workers & Pages →
 `cron-starter-web-prod` → Settings → Domains & Routes → Add → Custom
-domain). Nothing in the repository changes: the page builds its absolute
-links from the request it is answering, and the Cron Triggers do not depend
-on a hostname.
+domain). The page builds its absolute links from the request it is
+answering and the Cron Triggers do not depend on a hostname, so nothing else
+has to change; the repository names the domain in one place, `BASE_DOMAIN` in
+`intent.yaml`, which the site was born with as the reserved placeholder
+`cron-starter.example.com`. Replace it with your domain in the same change that
+records it.
