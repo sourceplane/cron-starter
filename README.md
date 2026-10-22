@@ -26,7 +26,7 @@ design, the milestones and the as-built status.
 git clone --depth 1 --branch <baseline-tag> https://github.com/sourceplane/cron-starter
 cd cron-starter
 orun new --blueprint repo-blueprint.yaml --out ~/sites/acme-crons --run-hooks --resume \
-  --set reponame=acme-crons --set productname="Acme Crons" --set productdomain=acme.dev \
+  --set reponame=acme-crons --set productname="Acme Crons" \
   --set githuborg=acme-inc --set subdomain=<workers-dev-subdomain>
 ```
 
