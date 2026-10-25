@@ -26,7 +26,7 @@ metadata:
     routes, the runs in a Workers KV namespace Terraform provisions per
     environment, and CI that applies the namespace and deploys the Worker to
     stage and prod on merge. One provider, one consent, one token; the
-    Workers Free plan is enough. Live in about fifteen minutes, in one
+    Workers Free plan is enough. Live in about thirteen minutes, in one
     landing.
   tags: [cron, scheduled, cloudflare, nextjs, kv, terraform]
 spec:
@@ -111,14 +111,14 @@ spec:
       # created.
       from: connection.cloudflare.workersSubdomain
 
-  # ── PREVIEW ONLY. repo-blueprint.yaml's `orun.integrations/reconcile@v1`
-  # hooks mint these, brokered, during 01-product. ─────────────────────────
-  # Transcribed from those hooks' own `keys:` and `template:` values, so
-  # testing/manifest.test.sh compares this list to the document that mints
-  # them. The console renders them read-only: no credential is ever typed,
-  # shown or stored. Keys that already exist are kept. The KV namespace ids
-  # are not here: they are not credentials, and the namespace's own apply
-  # publishes them.
+  # ── PREVIEW ONLY. repo-blueprint.yaml's one `orun.integrations/reconcile@v1`
+  # hook (`secrets`) mints these, brokered, during 01-product. ──────────────
+  # Transcribed from that hook's own `secrets:` entries (each key and its
+  # template), in its order, so testing/manifest.test.sh compares this list
+  # to the document that mints them. The console renders them read-only: no
+  # credential is ever typed, shown or stored. Keys that already exist are
+  # kept. The KV namespace ids are not here: they are not credentials, and
+  # the namespace's own apply publishes them.
   secrets:
     - key: CLOUDFLARE_API_TOKEN
       provider: cloudflare
@@ -147,9 +147,9 @@ spec:
     # THE BUILD DOCUMENT. There is no umbrella workflow and no agent brief:
     # every phase is declared in it and orun runs it.
     blueprint: repo-blueprint.yaml
-    # Summed from the phases' expectedMinutes. An estimate until a bootstrap
-    # measures it.
-    expectedMinutes: 15
+    # Summed from the phases' expectedMinutes (12 + 1). An estimate until a
+    # bootstrap measures it: no build of this baseline has been timed.
+    expectedMinutes: 13
     tokenChannel: ORUN_TOKEN_FILE   # how a runner hands over its refreshed token
   verify:
     urls:

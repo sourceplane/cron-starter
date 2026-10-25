@@ -157,7 +157,8 @@ which "fetched N ago" on a polling page does not notice.
 
 ```
 infra/terraform/cloudflare-kv ──apply──► orun secret WIRING_CLOUDFLARE_KV (stage, prod)
-                                               │   (the landing's await checks it exists)
+                                               │   (each deploy resolves it as it starts;
+                                               │    a missing one fails the lane)
                                                ▼
 apps/web  dependsOn cloudflare-kv (enforced on main) · secretEnv WIRING_CLOUDFLARE_KV_<ENV>
   build:  tooling/wire/live.mjs → wrangler.jsonc with the environment's namespace id
@@ -168,8 +169,8 @@ apps/web  dependsOn cloudflare-kv (enforced on main) · secretEnv WIRING_CLOUDFL
 
 `wrangler.jsonc` is committed as the fixture render of
 `wrangler.template.jsonc`, because the deploy lane's `verify-app-structure`
-step checks the config exists before it builds; Checks fails if the two
-disagree. The render keeps the template's `main` (`worker.ts`) and its
+step checks the config exists before it builds; `testing/e2e.test.sh` fails
+if the two disagree. The render keeps the template's `main` (`worker.ts`) and its
 `triggers.crons`, so the scheduled handler and its trigger survive every
 lane's build; the schedules live in `lib/crons.ts`, inside the bundle.
 
@@ -177,7 +178,6 @@ lane's build; the schedules live in `lib/crons.ts`, inside the bundle.
 
 | Workflow | What it runs | Ships to a product |
 |---|---|---|
-| `checks.yml` | install, wire fixtures (and the committed config is their render), typecheck, lint, test, build — every PR (not pushes: on main, `ci.yml` must be the only run a commit has, because the bootstrap's convergence watch takes the newest one) | yes |
-| `ci.yml` | the Orun pipeline: `orun plan --changed`, then one job per lane; applies the KV namespace, then deploys stage → prod on merge — the trigger registers with the Worker and starts firing within minutes. It plans nothing while `intent.yaml` names the placeholder workspace `ws_CHANGE_ME`, as this repository does | yes |
+| `ci.yml` | the Orun pipeline, and the only workflow a product carries: `orun plan --changed`, then one job per lane. A pull request runs the verify lanes (the KV root planned for stage and prod, the Worker built and dry-deployed per environment), except the bootstrap's own landings (`orun/BASE-*`), where `plan` alone runs and nothing waits for it (the landing checked its commit in the box); a merge applies the KV namespace, then deploys stage → prod — the trigger registers with the Worker and starts firing within minutes. It plans nothing while `intent.yaml` names the placeholder workspace `ws_CHANGE_ME`, as this repository does | yes |
 | `baseline.yml` | the baseline's own tiers: contract tests, the wiring path, the blueprint read by the pinned orun, the leak gate, the offline bootstrap with the product's own plan, the product built in the job tree, dry-deployed, served, and its scheduled handler fired | no |
 | `tag.yml` | cuts a `baseline-vN` tag (manual) | no |
