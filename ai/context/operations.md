@@ -133,6 +133,7 @@ orun integrations list --org <ws> --json && orun cloud check --org <ws>
 | change a schedule | edit its expression in `apps/web/lib/crons.ts` (and the one `pages/index.tsx` shows), merge. The trigger stays `* * * * *`: the scheduled handler dispatches every schedule from it |
 | run a schedule now | `curl https://<worker>/api/cron/<interval>` (the route is public) |
 | deploy a change | merge to `main`; watch the run; failed lanes → `gh run rerun --failed` |
+| deploy by hand | Orunbase's Deploy button, or `gh workflow run ci.yml --ref main -f environment=<env> [-f component=<a,b>]` — the named components (blank: every one) run in that environment as a merge runs them; started off `main` it is refused |
 | redeploy without a change | edit the last line of `apps/web/component.yaml` (`# orun: redeploy <reason> <stamp>`) and merge — it is a deploy trigger, nothing reads it |
 | add a binding (R2, D1, another KV) | a Terraform root under `infra/terraform/` that publishes `WIRING_<ROOT>`, a token in `wrangler.template.jsonc`, its fixture entry, the root in the build's `--components`, the `WIRING_<ROOT>_<ENV>` secretEnv and an enforced `dependsOn` on it in `apps/web/component.yaml` |
 | forget a schedule's last run | `wrangler kv key delete <interval> --namespace-id <id> --remote` (the id is in the environment's `WIRING_CLOUDFLARE_KV`) |
